@@ -1,0 +1,2295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carteira — Fórmula Mágica</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12161a">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Carteira FM">
+<style>
+  :root{
+    --papel:#e8e6e1; --papel2:#f4f3f0; --tinta:#12161a; --sub:#5c6169;
+    --linha:#c7c3ba; --linha2:#d5d2cb;
+    --ok:#1f5c3d; --ok-bg:#e3ece6;
+    --falha:#8a2318; --falha-bg:#f3e2de;
+    --atencao:#7a5a12; --atencao-bg:#f1e7d2;
+    --accent:#2b3239;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--papel);color:var(--tinta);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    font-size:15px;line-height:1.5;
+  }
+  .num,input,select,textarea,table{
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  header{
+    padding:18px 20px 14px;border-bottom:1px solid var(--linha);
+    display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;
+  }
+  header h1{font-size:16px;font-weight:600;letter-spacing:.06em;margin:0;text-transform:uppercase}
+  header .data-hoje{font-size:12px;color:var(--sub);font-family:ui-monospace,monospace}
+  nav{display:flex;border-bottom:1px solid var(--linha);background:var(--papel2);overflow-x:auto}
+  nav button{
+    font:inherit;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding:12px 18px;background:none;border:none;border-bottom:2px solid transparent;
+    color:var(--sub);cursor:pointer;white-space:nowrap;
+  }
+  nav button.ativo{color:var(--tinta);border-bottom-color:var(--tinta);font-weight:600}
+  nav button:hover{color:var(--tinta)}
+  main{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+  section.tela{display:none}
+  section.tela.ativa{display:block}
+  h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);
+     margin:28px 0 10px;border-top:1px solid var(--linha2);padding-top:16px}
+  h2:first-child{margin-top:0;border-top:none;padding-top:0}
+  .card{background:var(--papel2);border:1px solid var(--linha2);padding:14px 16px;margin-bottom:10px}
+  .grid-paineis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+  .painel-item .rot{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub)}
+  .painel-item .val{font-size:22px;font-weight:600;margin-top:2px;font-family:ui-monospace,monospace}
+  .painel-item .obs{font-size:11px;color:var(--sub);margin-top:2px}
+  .pos{color:var(--ok)} .neg{color:var(--falha)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--linha2);white-space:nowrap}
+  th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  .tabela-scroll{overflow-x:auto}
+  .tag{display:inline-block;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;
+       padding:2px 7px;border:1px solid currentColor}
+  .tag.completa{color:var(--ok);background:var(--ok-bg)}
+  .tag.incompleta{color:var(--atencao);background:var(--atencao-bg)}
+  .tag.orfa{color:var(--sub);background:var(--linha2)}
+  .tag.encerrada{color:var(--sub);background:transparent}
+  .alerta{padding:9px 12px;margin-bottom:8px;border-left:3px solid var(--atencao);
+          background:var(--atencao-bg);font-size:13px}
+  .alerta.critico{border-left-color:var(--falha);background:var(--falha-bg)}
+  .alerta .fechar{float:right;cursor:pointer;color:var(--sub);font-family:monospace}
+  form{display:grid;gap:10px;max-width:520px}
+  form.linha2{grid-template-columns:1fr 1fr}
+  form.linha3{grid-template-columns:1fr 1fr 1fr}
+  .campo{display:flex;flex-direction:column;gap:4px}
+  .campo.span2{grid-column:1/-1}
+  label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub)}
+  input,select,textarea{
+    padding:8px 9px;font-size:13.5px;background:#fff;border:1px solid var(--linha);color:var(--tinta);
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--tinta);outline-offset:0}
+  textarea{min-height:90px;resize:vertical}
+  button.acao{
+    padding:9px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    background:var(--tinta);color:var(--papel);border:none;cursor:pointer;justify-self:start;
+  }
+  button.acao:hover{background:var(--accent)}
+  button.secundario{background:transparent;color:var(--tinta);border:1px solid var(--tinta)}
+  button.pequeno{padding:4px 10px;font-size:11px}
+  button.perigo{color:var(--falha);border-color:var(--falha);background:transparent}
+  .sub-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .sub-tabs button{
+    font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;padding:6px 12px;
+    background:var(--papel2);border:1px solid var(--linha2);color:var(--sub);cursor:pointer;
+  }
+  .sub-tabs button.ativo{background:var(--tinta);color:var(--papel);border-color:var(--tinta)}
+  .config-linha{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--linha2)}
+  .config-linha label{min-width:230px;text-transform:none;font-size:13px;color:var(--tinta)}
+  .config-linha input{width:120px}
+  .config-linha .verif{font-size:10.5px;color:var(--sub);margin-left:auto}
+  .rodape-acoes{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+  .msg-vazio{color:var(--sub);font-size:13px;padding:16px 0}
+  .nota{font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.5}
+  .badge-desl{color:var(--falha);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase}
+  dialog{border:1px solid var(--linha);padding:0;max-width:420px;width:92%}
+  dialog::backdrop{background:rgba(18,22,26,.35)}
+  dialog .conteudo{padding:18px 20px}
+  dialog h3{margin:0 0 10px;font-size:14px;letter-spacing:.05em;text-transform:uppercase}
+  dialog .acoes{display:flex;gap:8px;margin-top:16px}
+  .oculto{display:none !important}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Carteira — Fórmula Mágica</h1>
+  <span class="data-hoje" id="dataHoje"></span>
+</header>
+
+<nav id="navPrincipal">
+  <button data-tela="painel" class="ativo">Painel</button>
+  <button data-tela="posicoes">Posições</button>
+  <button data-tela="ranking">Ranking</button>
+  <button data-tela="calendario">Calendário</button>
+  <button data-tela="contexto">Contexto</button>
+  <button data-tela="lancamentos">Lançamentos</button>
+  <button data-tela="configuracao">Configuração</button>
+</nav>
+
+<main>
+
+  <!-- ===================== PAINEL ===================== -->
+  <section class="tela ativa" id="tela-painel">
+    <div id="alertasPainel"></div>
+
+    <h2>Visão geral</h2>
+    <div class="grid-paineis">
+      <div class="card painel-item"><div class="rot">Valor total</div><div class="val num" id="pValorTotal">—</div></div>
+      <div class="card painel-item"><div class="rot">Em ações</div><div class="val num" id="pValorAcoes">—</div></div>
+      <div class="card painel-item"><div class="rot">Caixa</div><div class="val num" id="pCaixa">—</div><div class="obs">não é reserva de emergência</div></div>
+      <div class="card painel-item"><div class="rot">TIR (seu dinheiro)</div><div class="val num" id="pTIR">—</div><div class="obs">retorno ponderado pelo caixa aportado</div></div>
+      <div class="card painel-item"><div class="rot">TWR (o método)</div><div class="val num" id="pTWR">—</div><div class="obs">comparável ao índice</div></div>
+      <div class="card painel-item"><div class="rot">TWR vs IBOV</div><div class="val num" id="pVsIbov">—</div></div>
+      <div class="card painel-item"><div class="rot">Posições</div><div class="val num" id="pPosicoes">—</div><div class="obs" id="pPosicoesObs"></div></div>
+    </div>
+
+    <h2>Evolução patrimonial</h2>
+    <div id="containerGrafico" class="card"></div>
+
+    <h2>Posições recentes</h2>
+    <div class="tabela-scroll">
+      <table id="tabelaResumoPosicoes"><thead><tr>
+        <th>Ticker</th><th>Status</th><th>Preço médio</th><th>Preço atual</th><th>Rent.</th><th>Aniversário</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="msg-vazio oculto" id="msgSemPosicoes">Nenhuma posição lançada ainda. Comece em Lançamentos → Compra.</div>
+  </section>
+
+  <!-- ===================== POSIÇÕES ===================== -->
+  <section class="tela" id="tela-posicoes">
+    <h2>Todas as posições</h2>
+    <div class="tabela-scroll">
+      <table id="tabelaPosicoes"><thead><tr>
+        <th>Ticker</th><th>Status</th><th>Elegível</th><th>Qtd.</th><th>Preço médio</th>
+        <th>Preço atual</th><th>Valor</th><th>Rent.</th><th>Rent. R$</th>
+        <th>Abertura</th><th>Aniversário</th><th>Dist. máx/mín 52s</th><th></th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="msg-vazio oculto" id="msgSemPosicoes2">Nenhuma posição lançada ainda.</div>
+    <p class="nota">Distância de máxima/mínima de 52 semanas é informação de contexto, não sinal de compra ou venda.</p>
+  </section>
+
+  <!-- ===================== RANKING (MÓDULO 2) ===================== -->
+  <section class="tela" id="tela-ranking">
+    <h2>Importar universo (StatusInvest)</h2>
+    <p class="nota">
+      Fonte única: exportação CSV da busca avançada do StatusInvest — nunca misture com Fundamentus
+      (memorial, seção 5.1: as duas bases divergem de forma material, não marginal).
+      Frequência: mensal, para viabilizar a complementação condicional de posições.
+    </p>
+    <div class="campo"><input type="file" id="arquivoCSVRanking" accept=".csv,text/csv"></div>
+    <div class="campo" style="margin-top:8px"><label>Ou cole aqui</label>
+      <textarea id="colarCSVRanking" placeholder="TICKER;PRECO;DY;...;EV/EBIT;...;ROIC;...;LIQUIDEZ MEDIA DIARIA;..."></textarea>
+    </div>
+    <div class="campo" style="margin-top:10px;max-width:420px">
+      <label>Critério de ranqueamento</label>
+      <select id="criterioRanking">
+        <option value="evebit_roic">Fórmula Mágica — EV/EBIT + ROIC (padrão)</option>
+        <option value="pl_roe">Alternativo — P/L + ROE (conferência cruzada)</option>
+      </select>
+    </div>
+    <p class="nota">
+      O critério alternativo não substitui a Fórmula Mágica — serve de conferência. Uma empresa
+      bem posicionada nos dois tem menos chance de parecer barata por artifício contábil de um
+      indicador só. P/L e ROE usam lucro líquido e patrimônio, que sofrem influência de resultado
+      não recorrente e de alavancagem; EV/EBIT e ROIC olham o operacional e o capital empregado.
+    </p>
+    <button class="acao" id="btnImportarRanking" style="margin-top:8px">Importar e ranquear</button>
+    <div id="resultadoImportacaoRanking" style="margin-top:10px"></div>
+
+    <div id="blocoRanking" class="oculto">
+      <h2>Motivo das exclusões</h2>
+      <div id="resumoExclusoes" class="card"></div>
+
+      <h2>Ranking (menor soma = melhor)</h2>
+      <p class="nota">
+        DY acima de 30% é sinalizado, não excluído — costuma indicar provento extraordinário que não se repete.
+        O corte de elegibilidade (<span id="topNLabel"></span>) está destacado; abaixo dele a linha aparece esmaecida.
+      </p>
+      <div class="tabela-scroll">
+        <table id="tabelaRanking"><thead><tr>
+          <th>#</th><th>Ticker</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+
+      <div class="rodape-acoes">
+        <button class="acao" id="btnAplicarElegibilidade">Aplicar elegibilidade às posições detidas</button>
+      </div>
+      <p class="nota" id="notaAplicacaoElegibilidade"></p>
+    </div>
+
+    <h2>Listas editáveis do filtro</h2>
+    <div class="campo"><label>Financeiras excluídas (tickers separados por vírgula)</label>
+      <textarea id="listaFinanceiras"></textarea></div>
+    <div class="campo" style="margin-top:8px"><label>Recuperação judicial / exclusão manual (tickers separados por vírgula)</label>
+      <textarea id="listaRecJudicial"></textarea></div>
+    <div class="campo" style="margin-top:8px;max-width:260px"><label>Piso de liquidez diária (R$)</label>
+      <input type="number" id="pisoLiquidez" min="0" step="1000"></div>
+    <button class="acao secundario" id="btnSalvarListas" style="margin-top:8px">Salvar listas e piso</button>
+  </section>
+
+  <!-- ===================== CALENDÁRIO (MÓDULO 3) ===================== -->
+  <section class="tela" id="tela-calendario">
+    <h2>Limite de isenção do mês</h2>
+    <div id="painelLimiteMes" class="card"></div>
+
+    <h2>Próximos aniversários de rotação</h2>
+    <p class="nota">
+      A posição gira no aniversário da primeira compra. Se o ticker segue elegível no ranking,
+      pode manter; se saiu, vender. A ferramenta sinaliza — nunca executa nada sozinha.
+    </p>
+    <div class="tabela-scroll">
+      <table id="tabelaCalendario"><thead><tr>
+        <th>Ticker</th><th>Abertura</th><th>Aniversário</th><th>Faltam</th>
+        <th>Elegível</th><th>Sugestão</th><th>Valor atual</th><th>Ganho estimado</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="msg-vazio oculto" id="msgSemCalendario">Nenhuma posição aberta.</div>
+
+    <h2>Simulador de fatiamento fiscal</h2>
+    <p class="nota">
+      Marque as posições que pretende vender. O simulador distribui as vendas entre meses para
+      manter cada mês abaixo do limite de isenção, e mostra o imposto estimado caso o limite
+      seja ultrapassado.
+    </p>
+    <div class="tabela-scroll">
+      <table id="tabelaSimulador"><thead><tr>
+        <th></th><th>Ticker</th><th>Qtd.</th><th>Preço atual</th><th>Valor da venda</th><th>Ganho estimado</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <button class="acao" id="btnSimularFatiamento" style="margin-top:12px">Simular distribuição</button>
+    <div id="resultadoFatiamento" style="margin-top:12px"></div>
+  </section>
+
+  <!-- ===================== CONTEXTO (MÓDULO 4) ===================== -->
+  <section class="tela" id="tela-contexto">
+    <div class="alerta">
+      Preço-teto e faixa de entrada são <b>estimativas derivadas do próprio método</b>
+      (a que preço o EV/EBIT do papel igualaria o EV/EBIT de corte do último ranking importado),
+      não análise gráfica. São informação de contexto para a decisão do mês —
+      a saída continua sendo por tempo (aniversário de 12 meses), nunca por preço-alvo.
+    </div>
+
+    <h2>Posições detidas</h2>
+    <div class="tabela-scroll">
+      <table id="tabelaContexto"><thead><tr>
+        <th>Ticker</th><th>Preço atual</th><th>EV/EBIT no ranking</th><th>EV/EBIT de corte</th>
+        <th>Preço-teto estimado</th><th>Distância ao teto</th><th>Ranking de</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="msg-vazio oculto" id="msgSemContexto"></div>
+
+    <h2>Nota de conformidade por posição</h2>
+    <p class="nota">Registro livre — checagem de impedimento, declaração de bens, ou qualquer observação que precise ficar junto da posição.</p>
+    <div id="listaConformidade"></div>
+  </section>
+
+  <!-- ===================== LANÇAMENTOS ===================== -->
+  <section class="tela" id="tela-lancamentos">
+    <div class="sub-tabs" id="subTabsLanc">
+      <button data-sub="compra" class="ativo">Compra</button>
+      <button data-sub="venda">Venda</button>
+      <button data-sub="evento">Evento societário</button>
+      <button data-sub="provento">Provento</button>
+      <button data-sub="aporte">Aporte / retirada</button>
+      <button data-sub="nota">Nota de corretagem</button>
+      <button data-sub="precos">Preços</button>
+    </div>
+
+    <!-- COMPRA -->
+    <div class="sub-tela" id="sub-compra">
+      <div id="sugestaoAlocacao" class="alerta oculto"></div>
+      <form id="formCompra" class="linha2">
+        <div class="campo"><label>Ticker</label><input type="text" id="cTicker" placeholder="ex.: PLPL3" required></div>
+        <div class="campo"><label>Empresa (opcional)</label><input type="text" id="cEmpresa"></div>
+        <div class="campo"><label>Setor (opcional)</label><input type="text" id="cSetor"></div>
+        <div class="campo"><label>Data</label><input type="date" id="cData" required></div>
+        <div class="campo"><label>Quantidade</label><input type="number" id="cQtd" min="1" step="1" required></div>
+        <div class="campo"><label>Preço unitário (R$)</label><input type="number" id="cPreco" min="0" step="0.01" required></div>
+        <div class="campo"><label>Custos (R$)</label><input type="number" id="cCustos" min="0" step="0.01" value="0"></div>
+        <div class="campo"><label>Ranking na abertura (opcional)</label><input type="number" id="cRanking" min="1" step="1"></div>
+        <div class="campo span2"><label>Nota de conformidade (opcional)</label>
+          <input type="text" id="cConformidade" placeholder="checagem de impedimento, se aplicável"></div>
+        <button type="submit" class="acao">Lançar compra</button>
+      </form>
+    </div>
+
+    <!-- VENDA -->
+    <div class="sub-tela oculto" id="sub-venda">
+      <form id="formVenda" class="linha2">
+        <div class="campo span2"><label>Posição</label><select id="vPosicao" required></select></div>
+        <div class="campo"><label>Data</label><input type="date" id="vData" required></div>
+        <div class="campo"><label>Quantidade</label><input type="number" id="vQtd" min="1" step="1" required></div>
+        <div class="campo"><label>Preço unitário (R$)</label><input type="number" id="vPreco" min="0" step="0.01" required></div>
+        <div class="campo"><label>Custos (R$)</label><input type="number" id="vCustos" min="0" step="0.01" value="0"></div>
+        <div class="campo span2" id="previaGanho"></div>
+        <button type="submit" class="acao">Lançar venda</button>
+      </form>
+    </div>
+
+    <!-- EVENTO SOCIETÁRIO -->
+    <div class="sub-tela oculto" id="sub-evento">
+      <form id="formEvento" class="linha2">
+        <div class="campo"><label>Ticker</label><input type="text" id="eTicker" required></div>
+        <div class="campo"><label>Data</label><input type="date" id="eData" required></div>
+        <div class="campo">
+          <label>Tipo</label>
+          <select id="eTipo">
+            <option value="desdobramento">Desdobramento</option>
+            <option value="grupamento">Grupamento</option>
+            <option value="bonificacao">Bonificação</option>
+          </select>
+        </div>
+        <div class="campo" id="campoFator"><label>Fator (ex.: 2 para 1:2)</label><input type="number" id="eFator" min="0.0001" step="0.0001" value="2"></div>
+        <div class="campo oculto" id="campoQtdBonif"><label>Quantidade recebida</label><input type="number" id="eQtdBonif" min="0" step="1"></div>
+        <div class="campo"><label>Custo total atribuído (R$)</label><input type="number" id="eCustoTotal" min="0" step="0.01" value="0"></div>
+        <div class="campo span2"><label>Observação</label><input type="text" id="eObs"></div>
+        <button type="submit" class="acao">Lançar evento</button>
+      </form>
+      <p class="nota">Subscrição não é evento — lance como compra normal (Módulo 1, seção 2.1).</p>
+    </div>
+
+    <!-- PROVENTO -->
+    <div class="sub-tela oculto" id="sub-provento">
+      <form id="formProvento" class="linha2">
+        <div class="campo"><label>Ticker</label><input type="text" id="pvTicker" required></div>
+        <div class="campo"><label>Data de pagamento</label><input type="date" id="pvData" required></div>
+        <div class="campo">
+          <label>Tipo</label>
+          <select id="pvTipo"><option value="dividendo">Dividendo</option><option value="jcp">JCP</option></select>
+        </div>
+        <div class="campo"><label>Valor bruto (R$)</label><input type="number" id="pvValor" min="0" step="0.01" required></div>
+        <div class="campo"><label>IR retido (R$)</label><input type="number" id="pvIR" min="0" step="0.01" value="0"></div>
+        <button type="submit" class="acao">Lançar provento</button>
+      </form>
+    </div>
+
+    <!-- APORTE / RETIRADA -->
+    <div class="sub-tela oculto" id="sub-aporte">
+      <form id="formAporte" class="linha2">
+        <div class="campo"><label>Data</label><input type="date" id="apData" required></div>
+        <div class="campo">
+          <label>Tipo</label>
+          <select id="apTipo"><option value="aporte">Aporte</option><option value="retirada">Retirada</option></select>
+        </div>
+        <div class="campo span2"><label>Valor (R$)</label><input type="number" id="apValor" min="0" step="0.01" required></div>
+        <button type="submit" class="acao">Registrar</button>
+      </form>
+      <p class="nota">O aporte só entra no fluxo de caixa (TIR). Para alocar em uma compra, lance a compra separadamente — o formulário de compra sugere a prioridade (completar posição incompleta mais antiga elegível, antes de abrir posição nova).</p>
+    </div>
+
+    <!-- NOTA DE CORRETAGEM -->
+    <div class="sub-tela oculto" id="sub-nota">
+      <h2 style="margin-top:0">Importar nota de corretagem</h2>
+      <p class="nota">
+        Abra o PDF da nota, selecione tudo (Ctrl+A), copie (Ctrl+C) e cole abaixo.
+        Nada é enviado para fora do seu computador.<br><br>
+        <b>Duas coisas que a nota não resolve sozinha:</b> os custos vêm como total da nota,
+        não por operação — serão rateados proporcionalmente ao valor de cada negócio, como a
+        Receita trata. E a nota traz "especificação do título" (ex.: ETERNIT ON NM), não o
+        ticker — você informa a correspondência uma vez e a ferramenta passa a lembrar.
+      </p>
+      <div class="campo"><label>Texto da nota</label>
+        <textarea id="textoNota" style="min-height:150px" placeholder="Cole aqui o conteúdo copiado do PDF"></textarea></div>
+      <div class="campo linha2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div class="campo"><label>Data do pregão</label><input type="date" id="notaData"></div>
+        <div class="campo"><label>Total de custos da nota (R$)</label>
+          <input type="number" id="notaCustos" min="0" step="0.01" placeholder="Total corretagens / Despesas"></div>
+      </div>
+      <button class="acao" id="btnLerNota" style="margin-top:10px">Ler nota</button>
+      <div id="resultadoLeituraNota" style="margin-top:12px"></div>
+
+      <div id="blocoConferenciaNota" class="oculto">
+        <h2>Conferência antes de lançar</h2>
+        <p class="nota">
+          Confira cada linha e complete o ticker onde estiver em branco. Nada é gravado até
+          você clicar em confirmar.
+        </p>
+        <div class="tabela-scroll">
+          <table id="tabelaNota"><thead><tr>
+            <th>Usar</th><th>Especificação</th><th>Ticker</th><th>C/V</th><th>Qtd.</th>
+            <th>Preço médio</th><th>Valor</th><th>Custo rateado</th>
+          </tr></thead><tbody></tbody></table>
+        </div>
+        <button class="acao" id="btnConfirmarNota" style="margin-top:12px">Confirmar e lançar</button>
+      </div>
+
+      <h2>Correspondências já aprendidas</h2>
+      <div id="listaMapaTitulos" class="card"></div>
+    </div>
+
+    <!-- PREÇOS -->
+    <div class="sub-tela oculto" id="sub-precos">
+      <h2 style="margin-top:0">Importar CSV de cotações</h2>
+      <p class="nota">Arraste o arquivo baixado da aba de cotações do Google Sheets, ou cole o conteúdo abaixo. Colunas esperadas: Ticker, Preco, Max52, Min52 (nomes flexíveis).</p>
+      <div class="campo"><input type="file" id="arquivoCSVPrecos" accept=".csv,text/csv"></div>
+      <div class="campo" style="margin-top:8px"><label>Ou cole aqui</label><textarea id="colarCSVPrecos" placeholder="Ticker,Preco,Max52,Min52&#10;PETR4,43.05,45,32"></textarea></div>
+      <button class="acao" id="btnImportarPrecos" style="margin-top:8px">Importar</button>
+      <div id="resultadoImportacaoPrecos" style="margin-top:10px"></div>
+
+      <h2>Atualizar preço manual</h2>
+      <form id="formPrecoManual" class="linha2">
+        <div class="campo"><label>Ticker</label><input type="text" id="mpTicker" required></div>
+        <div class="campo"><label>Preço (R$)</label><input type="number" id="mpPreco" min="0" step="0.01" required></div>
+        <div class="campo"><label>Máxima 52 sem. (opcional)</label><input type="number" id="mpMax52" min="0" step="0.01"></div>
+        <div class="campo"><label>Mínima 52 sem. (opcional)</label><input type="number" id="mpMin52" min="0" step="0.01"></div>
+        <button type="submit" class="acao">Atualizar</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== CONFIGURAÇÃO ===================== -->
+  <section class="tela" id="tela-configuracao">
+    <h2>Parâmetros</h2>
+    <div id="listaConfig"></div>
+
+    <h2>Backup</h2>
+    <p class="nota" id="statusBackup"></p>
+    <div class="rodape-acoes">
+      <button class="acao secundario" id="btnExportar">Exportar backup (.json)</button>
+      <label class="acao secundario" style="display:inline-block;cursor:pointer">
+        Importar backup
+        <input type="file" id="arquivoImportarJSON" accept=".json,application/json" class="oculto">
+      </label>
+    </div>
+
+    <h2>Zona de risco</h2>
+    <div class="rodape-acoes">
+      <button class="acao perigo" id="btnDesfazer">Desfazer última alteração</button>
+      <button class="acao perigo" id="btnLimparTudo">Apagar todos os dados</button>
+    </div>
+  </section>
+
+</main>
+
+<dialog id="dlgConfirmacao">
+  <div class="conteudo">
+    <h3 id="dlgTitulo">Confirmar</h3>
+    <p id="dlgTexto"></p>
+    <div class="acoes">
+      <button class="acao secundario" id="dlgCancelar">Cancelar</button>
+      <button class="acao perigo" id="dlgConfirmar">Confirmar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+
+/* ==========================================================================
+   ESTADO E PERSISTÊNCIA
+   Modelo de dados conforme SPEC_Modulo1_Controle_Carteira.md v1.1, seção 3.
+   Este é um arquivo local (não roda no iframe de artifacts do Claude.ai),
+   por isso localStorage funciona normalmente no navegador do usuário.
+   A exportação/importação de JSON é obrigatória como backup — nunca
+   depender só do localStorage (spec, seção 5.3 do memorial).
+   ========================================================================== */
+
+const CHAVE_STORAGE = 'carteiraFormulaMagica_v1';
+const CHAVE_BACKUP_DATA = 'carteiraFormulaMagica_ultimoBackup';
+const VERSAO_SCHEMA = 1;
+
+function estadoPadrao(){
+  return {
+    versaoSchema: VERSAO_SCHEMA,
+    config: {
+      janelaComplementacaoMeses: 3,
+      metaPosicoes: 18,
+      topN: 30,
+      mesesRotacao: 12,
+      limiteIsencaoMensal: 20000,
+      aliquotaGanho: 0.15,
+      tetoSetorPercentual: 25,
+      falhasParaSuspeitaDeslistagem: 3,
+      pisoLiquidezDiaria: 200000,
+      dataVerificacaoParametrosFiscais: ''
+    },
+    // Listas editáveis do filtro do Módulo 2 (memorial, seção 5.1).
+    // Lista inicial de financeiras verificada em 04/08/2026.
+    listasFiltro: {
+      financeiras: ['B3SA3','CXSE3','ITSA3','ITSA4','PSSA3','WIZC3','BBAS3','ITUB3','ITUB4',
+                     'BBDC3','BBDC4','SANB11','BPAC11','IRBR3','BBSE3','ABCB4','BRSR6'],
+      recuperacaoJudicial: ['AZUL3']
+    },
+    // Correspondência "Especificação do título" (como aparece na nota de
+    // corretagem) -> ticker. A nota não traz o ticker, só nome + classe.
+    // Aprende conforme o usuário confirma cada importação.
+    mapaTitulos: {},
+    posicoes: [],
+    lotes: [],
+    eventos: [],
+    proventos: [],
+    fluxosExternos: [],
+    caixa: { saldo: 0, observacao: 'Troco não alocado. Não é reserva de emergência.', movimentos: [] },
+    precos: {},           // ticker -> {ultimoValido, dataUltimoValido, maxima52, minima52, falhasConsecutivas, suspeitaDeslistagem}
+    serieValorCarteira: [],
+    snapshotsRanking: []
+  };
+}
+
+let estado = carregarEstado();
+let estadoAnterior = null; // para desfazer (spec 5.6)
+
+function carregarEstado(){
+  try{
+    const bruto = localStorage.getItem(CHAVE_STORAGE);
+    if(!bruto) return estadoPadrao();
+    const obj = JSON.parse(bruto);
+    if(obj.versaoSchema !== VERSAO_SCHEMA){
+      console.warn('Schema incompatível, iniciando estado novo.');
+      return estadoPadrao();
+    }
+    // Retrocompatibilidade: preenche campos/config adicionados após a
+    // primeira versão do Módulo 1, sem apagar dados já lançados.
+    const padrao = estadoPadrao();
+    obj.config = Object.assign({}, padrao.config, obj.config||{});
+    obj.listasFiltro = Object.assign({}, padrao.listasFiltro, obj.listasFiltro||{});
+    obj.mapaTitulos = obj.mapaTitulos || {};
+    obj.snapshotsRanking = obj.snapshotsRanking || [];
+    return obj;
+  }catch(e){
+    console.error('Falha ao carregar estado local:', e);
+    return estadoPadrao();
+  }
+}
+
+function salvarEstado(comSnapshot){
+  if(comSnapshot !== false){
+    estadoAnterior = JSON.parse(JSON.stringify(estado));
+  }
+  try{
+    localStorage.setItem(CHAVE_STORAGE, JSON.stringify(estado));
+  }catch(e){
+    alert('Não foi possível salvar localmente (armazenamento cheio ou bloqueado). Exporte um backup imediatamente.');
+    console.error(e);
+  }
+}
+
+function uuid(){
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+    const r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8);
+    return v.toString(16);
+  });
+}
+
+function hoje(){ return new Date().toISOString().slice(0,10); }
+function addMeses(dataISO, n){
+  const d = new Date(dataISO+'T00:00:00');
+  d.setMonth(d.getMonth()+n);
+  return d.toISOString().slice(0,10);
+}
+function diffDias(dataA, dataB){
+  return Math.round((new Date(dataB+'T00:00:00') - new Date(dataA+'T00:00:00')) / 86400000);
+}
+function fmtMoeda(v){
+  if(v===null||v===undefined||isNaN(v)) return '—';
+  return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+function fmtPct(v, casas){
+  if(v===null||v===undefined||isNaN(v)) return '—';
+  return (v*100).toFixed(casas===undefined?2:casas).replace('.',',') + '%';
+}
+function fmtData(iso){
+  if(!iso) return '—';
+  const [a,m,d] = iso.split('-');
+  return `${d}/${m}/${a}`;
+}
+function classeSinal(v){ return v>0?'pos':(v<0?'neg':''); }
+
+/* ==========================================================================
+   CÁLCULOS — seção 4 da spec
+   ========================================================================== */
+
+// --- 4.2 Eventos societários: fator acumulado de desdobramento/grupamento
+// aplicável a um lote com base na sua data (eventos futuros ao lote afetam
+// a leitura corrente da quantidade/preço desse lote).
+function fatorAcumulado(ticker, dataLote){
+  return estado.eventos
+    .filter(e => e.ticker===ticker && (e.tipo==='desdobramento'||e.tipo==='grupamento') && e.data > dataLote)
+    .reduce((acc,e)=> acc * e.fator, 1);
+}
+
+// Quantidade de bonificação: tratada como entrada adicional de quantidade,
+// aplicada a partir da data do evento, sem lote de compra associado.
+// (Extensão pragmática ao schema da spec, que não define quantidade para
+// bonificação — documentado aqui.)
+function bonificacoesDoTicker(ticker){
+  return estado.eventos.filter(e => e.ticker===ticker && e.tipo==='bonificacao');
+}
+
+// --- 4.1 Preço médio (por posição = por ciclo de vida do ticker)
+function calcularPosicao(pos){
+  const lotesPos = estado.lotes.filter(l => l.posicaoId===pos.id).sort((a,b)=> a.data<b.data?-1:1);
+
+  let qtd = 0, custoTotal = 0, custoAcumuladoCompras = 0, qtdAcumuladaCompras = 0;
+  let realizado = 0; // ganho/perda de vendas parciais já ocorridas
+
+  for(const lote of lotesPos){
+    const fator = fatorAcumulado(pos.ticker, lote.data);
+    const qtdEfetiva = lote.quantidade * fator;
+    const precoEfetivo = lote.precoUnitario / fator;
+
+    if(lote.tipo==='compra'){
+      custoAcumuladoCompras += qtdEfetiva*precoEfetivo + lote.custos;
+      qtdAcumuladaCompras += qtdEfetiva;
+      qtd += qtdEfetiva;
+      custoTotal += qtdEfetiva*precoEfetivo + lote.custos;
+    } else { // venda
+      const precoMedioAntes = qtdAcumuladaCompras>0 ? custoAcumuladoCompras/qtdAcumuladaCompras : 0;
+      const ganho = (qtdEfetiva*precoEfetivo - lote.custos) - (precoMedioAntes*qtdEfetiva);
+      realizado += ganho;
+      // custo total reduzido proporcionalmente (4.1: preço médio não muda)
+      const custoBaixado = precoMedioAntes * qtdEfetiva;
+      custoAcumuladoCompras -= custoBaixado;
+      qtdAcumuladaCompras -= qtdEfetiva;
+      qtd -= qtdEfetiva;
+      custoTotal -= custoBaixado;
+    }
+  }
+
+  // bonificações: somam quantidade e custo (pode ser zero), sem alterar lotes
+  for(const b of bonificacoesDoTicker(pos.ticker)){
+    const qtdBonif = b.quantidadeConcedida || 0;
+    qtd += qtdBonif;
+    custoTotal += (b.custoTotal||0);
+    qtdAcumuladaCompras += qtdBonif;
+    custoAcumuladoCompras += (b.custoTotal||0);
+  }
+
+  const precoMedio = qtd>0 ? custoTotal/qtd : 0;
+  const infoPreco = estado.precos[pos.ticker];
+  const precoAtual = infoPreco ? infoPreco.ultimoValido : null;
+  const valorMercado = precoAtual!==null ? qtd*precoAtual : null;
+
+  const proventosRecebidos = estado.proventos
+    .filter(p=>p.ticker===pos.ticker)
+    .reduce((s,p)=> s + (p.valorBruto||0), 0);
+
+  const custoOriginal = lotesPos.filter(l=>l.tipo==='compra')
+    .reduce((s,l)=> s + l.quantidade*l.precoUnitario + l.custos, 0)
+    + bonificacoesDoTicker(pos.ticker).reduce((s,b)=>s+(b.custoTotal||0),0);
+
+  const rentabilidade = custoOriginal>0 && valorMercado!==null
+    ? (valorMercado + proventosRecebidos + realizado) / custoOriginal - 1
+    : null;
+  const rentabilidadeReais = custoOriginal>0 && valorMercado!==null
+    ? (valorMercado + proventosRecebidos + realizado) - custoOriginal
+    : null;
+
+  const primeiraCompra = lotesPos.find(l=>l.tipo==='compra');
+  const aniversario = primeiraCompra ? addMeses(pos.dataAbertura, estado.config.mesesRotacao) : null;
+  const diasParaAniversario = aniversario ? diffDias(hoje(), aniversario) : null;
+
+  let distMax=null, distMin=null;
+  if(infoPreco && precoAtual!==null){
+    if(infoPreco.maxima52) distMax = precoAtual/infoPreco.maxima52 - 1;
+    if(infoPreco.minima52) distMin = precoAtual/infoPreco.minima52 - 1;
+  }
+
+  return {
+    pos, qtd, precoMedio, precoAtual, valorMercado, custoOriginal,
+    proventosRecebidos, realizado, rentabilidade, rentabilidadeReais,
+    aniversario, diasParaAniversario, distMax, distMin,
+    infoPreco, lotesPos
+  };
+}
+
+function todasPosicoesCalculadas(){
+  return estado.posicoes.map(calcularPosicao);
+}
+
+// --- 4.3/4.4 TIR (XIRR) — fronteira: ações + caixa
+function construirFluxosTIR(){
+  const fluxos = [];
+  for(const f of estado.fluxosExternos){
+    fluxos.push({ data: f.data, valor: f.tipo==='aporte' ? -f.valor : f.valor });
+  }
+  const calc = todasPosicoesCalculadas();
+  const valorAcoes = calc.reduce((s,c)=> s + (c.valorMercado||0), 0);
+  const valorTotal = valorAcoes + (estado.caixa.saldo||0);
+  if(fluxos.length>0){
+    fluxos.push({ data: hoje(), valor: valorTotal });
+  }
+  return fluxos;
+}
+
+function xirr(fluxos){
+  if(fluxos.length < 2) return null;
+  const todasMesmaData = fluxos.every(f=>f.data===fluxos[0].data);
+  if(todasMesmaData) return null;
+
+  const d0 = fluxos[0].data;
+  const t = fluxos.map(f => diffDias(d0, f.data)/365);
+  const vals = fluxos.map(f=>f.valor);
+
+  function vpl(r){ return vals.reduce((s,v,i)=> s + v/Math.pow(1+r, t[i]), 0); }
+  function dVpl(r){ return vals.reduce((s,v,i)=> s - t[i]*v/Math.pow(1+r, t[i]+1), 0); }
+
+  // Newton-Raphson
+  let r = 0.1;
+  let convergiu = false;
+  for(let i=0;i<50;i++){
+    const f = vpl(r), df = dVpl(r);
+    if(Math.abs(df) < 1e-10) break;
+    const novo = r - f/df;
+    if(!isFinite(novo)) break;
+    if(Math.abs(novo-r) < 1e-7){ r = novo; convergiu = true; break; }
+    r = novo;
+  }
+  if(convergiu && r>-0.99 && r<10) return r;
+
+  // fallback: bisseção no domínio -0.99 a 10
+  let lo=-0.99, hi=10, fLo=vpl(lo), fHi=vpl(hi);
+  if((fLo>0 && fHi>0) || (fLo<0 && fHi<0)) return null; // sem raiz garantida no domínio
+  for(let i=0;i<200;i++){
+    const mid=(lo+hi)/2, fMid=vpl(mid);
+    if(Math.abs(fMid) < 1e-6) return mid;
+    if((fLo<0 && fMid<0)||(fLo>0 && fMid>0)){ lo=mid; fLo=fMid; } else { hi=mid; }
+  }
+  return (lo+hi)/2;
+}
+
+// --- 4.5 TWR — fronteira: só ações.
+// Simplificação de escopo (documentada): sem série diária garantida (o
+// Módulo 1 não importa preço todo dia), o encadeamento usa como "dias" os
+// pontos em que houve atualização de preço ou movimento de caixa->ações,
+// nunca inferior a um por lote de compra/venda. É TWR entre atualizações,
+// não TWR diário estrito — rotulado como tal na interface.
+/* --- 4.5 TWR — fronteira: só ações.
+   IMPLEMENTAÇÃO CORRIGIDA (v2): a versão anterior avaliava a carteira em
+   datas passadas usando o preço de HOJE, o que produz retorno sem sentido
+   assim que existe mais de uma data. Agora o cálculo se apoia em
+   `serieValorCarteira`: uma fotografia datada do patrimônio, gravada a cada
+   lançamento e a cada atualização de preço. É o método correto disponível
+   sem histórico diário de cotações.
+   Consequência honesta: a série começa a existir a partir do primeiro uso.
+   Não há como reconstruir retrospectivamente o que não foi fotografado. */
+
+function valorAcoesAgora(){
+  return todasPosicoesCalculadas().reduce((s,c)=> s + (c.valorMercado||0), 0);
+}
+
+function fluxoParaAcoesNaData(dataRef){
+  // dinheiro que entrou (compra) ou saiu (venda) da parcela em ações
+  return estado.lotes
+    .filter(l=>l.data===dataRef)
+    .reduce((f,l)=> f + (l.tipo==='compra'
+      ? (l.quantidade*l.precoUnitario + l.custos)
+      : -(l.quantidade*l.precoUnitario - l.custos)), 0);
+}
+
+function registrarSnapshotValor(){
+  const d = hoje();
+  const infoIbov = estado.precos['IBOV'] || estado.precos['INDEXBVMF:IBOV'] || null;
+  const ponto = {
+    data: d,
+    valorAcoes: valorAcoesAgora(),
+    valorCaixa: estado.caixa.saldo || 0,
+    fluxoAcoesDoDia: fluxoParaAcoesNaData(d),
+    ibov: infoIbov ? infoIbov.ultimoValido : null
+  };
+  const iExistente = estado.serieValorCarteira.findIndex(s=>s.data===d);
+  if(iExistente>=0) estado.serieValorCarteira[iExistente] = ponto;
+  else estado.serieValorCarteira.push(ponto);
+  estado.serieValorCarteira.sort((a,b)=> a.data<b.data?-1:1);
+}
+
+function calcularTWR(){
+  const s = estado.serieValorCarteira;
+  if(s.length < 2) return null;
+  let acumulado = 1, houvePeriodoValido = false;
+  for(let i=1;i<s.length;i++){
+    const vAnt = s[i-1].valorAcoes;
+    if(vAnt <= 0) continue;                    // 4.5: subperíodo ignorado se V anterior = 0
+    const r = (s[i].valorAcoes - s[i].fluxoAcoesDoDia) / vAnt - 1;
+    if(!isFinite(r)) continue;
+    acumulado *= (1+r);
+    houvePeriodoValido = true;
+  }
+  return houvePeriodoValido ? acumulado - 1 : null;
+}
+
+function calcularRetornoIbov(){
+  const s = estado.serieValorCarteira.filter(p=>p.ibov!==null && p.ibov>0);
+  if(s.length < 2) return null;
+  return s[s.length-1].ibov / s[0].ibov - 1;
+}
+
+
+/* ==========================================================================
+   REGRAS DE NEGÓCIO — seção 2 da spec (modelo "completar depois")
+   ========================================================================== */
+
+function posicaoIncompletaMaisAntigaElegivel(){
+  return estado.posicoes
+    .filter(p => p.status==='incompleta' && p.elegivel && hoje() <= p.dataFimJanelaComplementacao)
+    .sort((a,b)=> a.dataAbertura < b.dataAbertura ? -1 : 1)[0] || null;
+}
+
+function atualizarStatusPosicoesOrfas(){
+  let mudou = false;
+  for(const p of estado.posicoes){
+    if(p.status==='incompleta'){
+      if(!p.elegivel || hoje() > p.dataFimJanelaComplementacao){
+        p.status = 'orfa';
+        mudou = true;
+      }
+    }
+  }
+  if(mudou) salvarEstado();
+}
+
+/* ==========================================================================
+   CSV / PARSER DE PREÇOS
+   ========================================================================== */
+
+function parseCSV(texto){
+  const linhas = texto.replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  if(linhas.length===0) return [];
+  // Separador decidido UMA VEZ pelo cabeçalho, não linha a linha. Decidir por
+  // linha falha quando o número de ';' (delimitadores) empata com o número
+  // de ',' (separadores decimais) nas linhas de dados — caso do CSV do
+  // StatusInvest, onde cada linha tem ~29 de cada. O cabeçalho não tem
+  // números decimais, então a contagem ali é inequívoca.
+  const nPontoVirgula = (linhas[0].match(/;/g)||[]).length;
+  const nVirgula = (linhas[0].match(/,/g)||[]).length;
+  const sep = nPontoVirgula > nVirgula ? ';' : ',';
+
+  return linhas.map(l=>{
+    const campos=[]; let atual=''; let aspas=false;
+    for(let i=0;i<l.length;i++){
+      const c=l[i];
+      if(c==='"'){ if(aspas && l[i+1]==='"'){atual+='"';i++;} else aspas=!aspas; }
+      else if(c===sep && !aspas){ campos.push(atual); atual=''; }
+      else atual+=c;
+    }
+    campos.push(atual);
+    return campos.map(c=>c.trim());
+  });
+}
+
+function numBR(s){
+  if(s===undefined||s===null) return null;
+  s = String(s).trim();
+  if(s==='' || /^#/.test(s)) return null;
+  s = s.replace(/\./g,'').replace(',', '.');
+  const v = parseFloat(s);
+  return isNaN(v) ? null : v;
+}
+
+function localizarColuna(cabecalho, candidatos){
+  const lower = cabecalho.map(c=>c.toLowerCase().trim());
+  for(const cand of candidatos){
+    const i = lower.findIndex(c=>c.includes(cand));
+    if(i>=0) return i;
+  }
+  return -1;
+}
+
+function importarCSVPrecos(texto){
+  const linhas = parseCSV(texto);
+  if(linhas.length<2) return { ok:false, msg:'Arquivo vazio ou sem linhas de dados.' };
+  const cab = linhas[0];
+  const iTicker = localizarColuna(cab, ['ticker','papel','codigo']);
+  const iPreco = localizarColuna(cab, ['preco','preço','price','cotação','cotacao']);
+  const iMax = localizarColuna(cab, ['max52','máxima','maxima','high52']);
+  const iMin = localizarColuna(cab, ['min52','mínima','minima','low52']);
+  if(iTicker<0 || iPreco<0){
+    return { ok:false, msg:'Não encontrei colunas de Ticker e Preço no cabeçalho: '+cab.join(' | ') };
+  }
+
+  let atualizados=0, semPreco=0, novosSuspeitos=[];
+  for(let i=1;i<linhas.length;i++){
+    const l = linhas[i];
+    const ticker = (l[iTicker]||'').toUpperCase().trim();
+    if(!ticker) continue;
+    const preco = numBR(l[iPreco]);
+    const max52 = iMax>=0 ? numBR(l[iMax]) : null;
+    const min52 = iMin>=0 ? numBR(l[iMin]) : null;
+
+    if(!estado.precos[ticker]) estado.precos[ticker] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+    const info = estado.precos[ticker];
+
+    if(preco!==null){
+      info.ultimoValido = preco;
+      info.dataUltimoValido = hoje();
+      info.falhasConsecutivas = 0;
+      info.suspeitaDeslistagem = false;
+      atualizados++;
+    } else {
+      // 5.2: nunca sobrescrever preço bom com #N/A; contar falha consecutiva
+      info.falhasConsecutivas = (info.falhasConsecutivas||0) + 1;
+      semPreco++;
+      if(info.falhasConsecutivas >= estado.config.falhasParaSuspeitaDeslistagem && !info.suspeitaDeslistagem){
+        info.suspeitaDeslistagem = true;
+        novosSuspeitos.push(ticker);
+      }
+    }
+    if(max52!==null) info.maxima52 = max52;
+    if(min52!==null) info.minima52 = min52;
+  }
+  registrarSnapshotValor();
+  salvarEstado();
+  return { ok:true, atualizados, semPreco, novosSuspeitos, total: linhas.length-1 };
+}
+
+/* ==========================================================================
+   MÓDULO 2 — RANKING E FILTROS (memorial, seção 5.1)
+   Fonte única: StatusInvest, CSV nativo. Nunca misturar com Fundamentus.
+   Ordem de filtros e motivo de cada um documentados no memorial; aqui só
+   a implementação. Testado originalmente em Python sobre o CSV real do
+   usuário (04/08/2026) — esta função replica a mesma lógica.
+   ========================================================================== */
+
+function raizTicker(ticker){
+  // raiz = ticker sem o sufixo numérico de classe (PETR4 -> PETR, KLBN11 -> KLBN)
+  return ticker.replace(/\d+$/, '');
+}
+
+function processarRanking(texto, criterio){
+  criterio = criterio || 'evebit_roic';
+  const linhas = parseCSV(texto);
+  if(linhas.length<2) return { ok:false, msg:'Arquivo vazio ou sem linhas de dados.' };
+  const cab = linhas[0];
+
+  const iTicker = localizarColuna(cab, ['ticker','papel','codigo']);
+  const iEvEbit = localizarColuna(cab, ['ev/ebit','ev / ebit']);
+  const iRoic   = localizarColuna(cab, ['roic']);
+  const iPvp    = localizarColuna(cab, ['p/vp','p / vp']);
+  const iVpa    = localizarColuna(cab, ['vpa']);
+  const iRoe    = localizarColuna(cab, ['roe']);
+  const iLiq    = localizarColuna(cab, ['liquidez media diaria','liquidez média diária','liq.2meses','liq. 2 meses']);
+  const iDy     = localizarColuna(cab, ['dy','div.yield','dividend yield']);
+  const iPl     = localizarColuna(cab, ['p/l','p / l']);
+  const iPreco  = localizarColuna(cab, ['preco','preço','cotação','cotacao']);
+
+  if(iTicker<0 || iEvEbit<0 || iRoic<0){
+    return { ok:false, msg:'Não encontrei colunas de Ticker, EV/EBIT e ROIC no cabeçalho: '+cab.join(' | ') };
+  }
+  if(criterio==='pl_roe' && (iPl<0 || iRoe<0)){
+    return { ok:false, msg:'Critério P/L + ROE exige colunas de P/L e ROE, não encontradas no cabeçalho.' };
+  }
+
+  const financeiras = new Set(estado.listasFiltro.financeiras.map(t=>t.toUpperCase()));
+  const recJudicial = new Set(estado.listasFiltro.recuperacaoJudicial.map(t=>t.toUpperCase()));
+  const pisoLiq = estado.config.pisoLiquidezDiaria;
+
+  const excluidos = { 'EV/EBIT ou ROIC ausente/≤0':[], 'financeira':[], 'patrimônio líquido negativo (P/VP ou VPA ≤ 0)':[],
+                       'ROE < -50% (situação crítica)':[], 'recuperação judicial / exclusão manual':[],
+                       'liquidez abaixo do piso':[], 'classe duplicada (mantida a mais líquida)':[] };
+  let candidatos = [];
+
+  for(let i=1;i<linhas.length;i++){
+    const l = linhas[i];
+    const ticker = (l[iTicker]||'').toUpperCase().trim();
+    if(!ticker) continue;
+    const evEbit = numBR(l[iEvEbit]);
+    const roic   = numBR(l[iRoic]);
+    const pvp    = iPvp>=0 ? numBR(l[iPvp]) : null;
+    const vpa    = iVpa>=0 ? numBR(l[iVpa]) : null;
+    const roe    = iRoe>=0 ? numBR(l[iRoe]) : null;
+    const liq    = iLiq>=0 ? numBR(l[iLiq]) : null;
+    const dy     = iDy>=0 ? numBR(l[iDy]) : null;
+
+    if(evEbit===null || roic===null || evEbit<=0 || roic<=0){ excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue; }
+    if(financeiras.has(ticker)){ excluidos['financeira'].push(ticker); continue; }
+    if((pvp!==null && pvp<=0) || (vpa!==null && vpa<=0)){ excluidos['patrimônio líquido negativo (P/VP ou VPA ≤ 0)'].push(ticker); continue; }
+    if(roe!==null && roe < -50){ excluidos['ROE < -50% (situação crítica)'].push(ticker); continue; }
+    if(recJudicial.has(ticker)){ excluidos['recuperação judicial / exclusão manual'].push(ticker); continue; }
+    if(liq!==null && liq < pisoLiq){ excluidos['liquidez abaixo do piso'].push(ticker); continue; }
+
+    const pl = iPl>=0 ? numBR(l[iPl]) : null;
+    const precoAtualCsv = iPreco>=0 ? numBR(l[iPreco]) : null;
+    // No critério alternativo, P/L ≤ 0 (prejuízo) inviabiliza o ranqueamento.
+    if(criterio==='pl_roe' && (pl===null || pl<=0 || roe===null || roe<=0)){
+      excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue;
+    }
+    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv });
+  }
+
+  // deduplicação por raiz, mantendo a classe mais líquida (memorial 5.1, regra 8)
+  const porRaiz = {};
+  for(const c of candidatos){
+    const r = raizTicker(c.ticker);
+    if(!porRaiz[r] || c.liq > porRaiz[r].liq) porRaiz[r] = c;
+  }
+  for(const c of candidatos){
+    const r = raizTicker(c.ticker);
+    if(porRaiz[r].ticker !== c.ticker) excluidos['classe duplicada (mantida a mais líquida)'].push(c.ticker);
+  }
+  candidatos = Object.values(porRaiz);
+
+  // Ranqueamento: soma das posições nos dois fatores.
+  // Fator "barato" = menor é melhor; fator "qualidade" = maior é melhor.
+  const ehPlRoe = criterio==='pl_roe';
+  const valorBarato   = c => ehPlRoe ? c.pl   : c.evEbit;
+  const valorQualidade= c => ehPlRoe ? c.roe  : c.roic;
+
+  const porBarato    = [...candidatos].sort((a,b)=> valorBarato(a)-valorBarato(b));
+  const porQualidade = [...candidatos].sort((a,b)=> valorQualidade(b)-valorQualidade(a));
+  const posB = {}, posQ = {};
+  porBarato.forEach((c,i)=> posB[c.ticker]=i+1);
+  porQualidade.forEach((c,i)=> posQ[c.ticker]=i+1);
+  candidatos.forEach(c=>{
+    c.fator1 = valorBarato(c);
+    c.fator2 = valorQualidade(c);
+    c.posEv = posB[c.ticker];
+    c.posRoic = posQ[c.ticker];
+    c.soma = posB[c.ticker] + posQ[c.ticker];
+  });
+  candidatos.sort((a,b)=>a.soma-b.soma);
+  candidatos.forEach((c,i)=> c.posicao = i+1);
+
+  return { ok:true, candidatos, excluidos, criterio, totalLinhas: linhas.length-1 };
+}
+
+function tickersDetidos(){
+  const map = {};
+  for(const p of estado.posicoes){
+    if(p.status==='encerrada') continue;
+    map[raizTicker(p.ticker)] = p.ticker;
+  }
+  return map;
+}
+
+/* ==========================================================================
+   RENDERIZAÇÃO
+   ========================================================================== */
+
+function render(){
+  document.getElementById('dataHoje').textContent = fmtData(hoje());
+  atualizarStatusPosicoesOrfas();
+  renderPainel();
+  renderPosicoes();
+  renderSelectPosicoesVenda();
+  renderConfig();
+  renderCalendario();
+  renderContexto();
+  renderMapaTitulos();
+  renderStatusBackup();
+}
+
+function renderPainel(){
+  const calc = todasPosicoesCalculadas();
+  const valorAcoes = calc.reduce((s,c)=> s+(c.valorMercado||0), 0);
+  const valorTotal = valorAcoes + (estado.caixa.saldo||0);
+
+  document.getElementById('pValorTotal').textContent = fmtMoeda(valorTotal);
+  document.getElementById('pValorAcoes').textContent = fmtMoeda(valorAcoes);
+  const elCaixa = document.getElementById('pCaixa');
+  elCaixa.textContent = fmtMoeda(estado.caixa.saldo||0);
+  elCaixa.className = 'val num ' + ((estado.caixa.saldo||0)<0 ? 'neg' : '');
+
+  const tir = xirr(construirFluxosTIR());
+  const elTIR = document.getElementById('pTIR');
+  elTIR.textContent = tir===null ? 'indisponível' : fmtPct(tir);
+  elTIR.className = 'val num ' + (tir!==null?classeSinal(tir):'');
+
+  const twr = calcularTWR();
+  const elTWR = document.getElementById('pTWR');
+  elTWR.textContent = twr===null ? 'indisponível' : fmtPct(twr);
+  elTWR.className = 'val num ' + (twr!==null?classeSinal(twr):'');
+
+  const retIbov = calcularRetornoIbov();
+  const elVs = document.getElementById('pVsIbov');
+  if(twr===null || retIbov===null){
+    elVs.textContent = '—';
+    elVs.className = 'val num';
+  } else {
+    const dif = twr - retIbov;
+    elVs.textContent = (dif>=0?'+':'') + fmtPct(dif,1);
+    elVs.className = 'val num ' + classeSinal(dif);
+  }
+
+  renderGrafico();
+
+  const abertas = estado.posicoes.filter(p=>p.status!=='encerrada').length;
+  document.getElementById('pPosicoes').textContent = abertas + ' / ' + estado.config.metaPosicoes;
+  const incompletas = estado.posicoes.filter(p=>p.status==='incompleta').length;
+  document.getElementById('pPosicoesObs').textContent = incompletas>0 ? incompletas+' incompleta(s)' : '';
+
+  // tabela resumo (top 8 por valor)
+  const tbody = document.querySelector('#tabelaResumoPosicoes tbody');
+  tbody.innerHTML='';
+  const abertasCalc = calc.filter(c=>c.pos.status!=='encerrada').sort((a,b)=>(b.valorMercado||0)-(a.valorMercado||0)).slice(0,8);
+  document.getElementById('msgSemPosicoes').classList.toggle('oculto', abertasCalc.length>0);
+  for(const c of abertasCalc){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${c.pos.ticker}${c.infoPreco&&c.infoPreco.suspeitaDeslistagem?' <span class="badge-desl">deslistagem?</span>':''}</td>
+      <td><span class="tag ${c.pos.status}">${c.pos.status}</span></td>
+      <td class="num">${fmtMoeda(c.precoMedio)}</td>
+      <td class="num">${c.precoAtual!==null?fmtMoeda(c.precoAtual):'—'}</td>
+      <td class="num ${classeSinal(c.rentabilidade)}">${c.rentabilidade!==null?fmtPct(c.rentabilidade,1):'—'}</td>
+      <td class="num">${fmtData(c.aniversario)}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  // alertas
+  const alertas = [];
+  const hj = hoje();
+  for(const p of estado.posicoes){
+    if(p.status==='incompleta'){
+      const dias = diffDias(hj, p.dataFimJanelaComplementacao);
+      if(dias<=30 && dias>=0) alertas.push({tipo:'atencao', txt:`${p.ticker}: janela de complementação fecha em ${dias} dia(s) (${fmtData(p.dataFimJanelaComplementacao)}).`});
+    }
+    if(p.status!=='encerrada'){
+      const c = calc.find(x=>x.pos.id===p.id);
+      if(c && c.diasParaAniversario!==null && c.diasParaAniversario<=30 && c.diasParaAniversario>=0){
+        alertas.push({tipo:'atencao', txt:`${p.ticker}: aniversário de rotação em ${c.diasParaAniversario} dia(s) (${fmtData(c.aniversario)}).`});
+      }
+    }
+  }
+  for(const [ticker,info] of Object.entries(estado.precos)){
+    if(info.suspeitaDeslistagem){
+      alertas.push({tipo:'critico', txt:`${ticker}: ${info.falhasConsecutivas} importações seguidas sem preço válido. Suspeita de deslistagem — compra bloqueada até verificação manual.`});
+    } else if(info.dataUltimoValido && diffDias(info.dataUltimoValido, hj) > 5){
+      alertas.push({tipo:'atencao', txt:`${ticker}: preço desatualizado desde ${fmtData(info.dataUltimoValido)}.`});
+    }
+  }
+  // teto de setor
+  const porSetor = {};
+  for(const c of calc){
+    if(c.pos.status==='encerrada' || !c.pos.setor) continue;
+    porSetor[c.pos.setor] = (porSetor[c.pos.setor]||0) + (c.valorMercado||0);
+  }
+  if(valorAcoes>0){
+    for(const [setor,v] of Object.entries(porSetor)){
+      const pct = v/valorAcoes*100;
+      if(pct > estado.config.tetoSetorPercentual){
+        alertas.push({tipo:'atencao', txt:`Setor "${setor}" representa ${pct.toFixed(1)}% da carteira, acima do teto de ${estado.config.tetoSetorPercentual}%.`});
+      }
+    }
+  }
+  const ultimoBackup = localStorage.getItem(CHAVE_BACKUP_DATA);
+  if(!ultimoBackup || diffDias(ultimoBackup, hj) > 30){
+    alertas.push({tipo:'atencao', txt:'Backup desatualizado (mais de 30 dias, ou nunca exportado). Exporte em Configuração.'});
+  }
+
+  const contAlertas = document.getElementById('alertasPainel');
+  contAlertas.innerHTML='';
+  for(const a of alertas){
+    const div = document.createElement('div');
+    div.className = 'alerta' + (a.tipo==='critico'?' critico':'');
+    div.innerHTML = a.txt;
+    contAlertas.appendChild(div);
+  }
+}
+
+function renderGrafico(){
+  const cont = document.getElementById('containerGrafico');
+  const s = estado.serieValorCarteira;
+
+  if(s.length < 2){
+    cont.innerHTML = `<div class="msg-vazio">
+      A série patrimonial começa a partir do primeiro uso e ganha um ponto a cada
+      lançamento ou atualização de preço. Hoje há ${s.length} ponto(s) —
+      são necessários pelo menos 2 para desenhar a curva.
+      <br><br>
+      <span class="nota">Não é possível reconstruir retroativamente: só existe o que foi
+      fotografado. Se você quer a série desde o início, atualize os preços com
+      regularidade a partir de agora.</span>
+    </div>`;
+    return;
+  }
+
+  const L = 60, R = 16, T = 16, B = 34;   // margens
+  const W = 860, H = 260;
+  const iw = W - L - R, ih = H - T - B;
+
+  const patrimonio = s.map(p => (p.valorAcoes||0) + (p.valorCaixa||0));
+  const investido = [];
+  let acum = 0;
+  for(const p of s){
+    // aporte líquido acumulado até a data do ponto
+    acum = estado.fluxosExternos
+      .filter(f => f.data <= p.data)
+      .reduce((t,f)=> t + (f.tipo==='aporte'? f.valor : -f.valor), 0);
+    investido.push(acum);
+  }
+
+  const todos = patrimonio.concat(investido);
+  let vMin = Math.min(...todos), vMax = Math.max(...todos);
+  if(vMin === vMax){ vMin = vMin - 1; vMax = vMax + 1; }
+  const pad = (vMax - vMin) * 0.12;
+  vMin -= pad; vMax += pad;
+
+  const x = i => L + (s.length===1 ? iw/2 : (i/(s.length-1))*iw);
+  const y = v => T + ih - ((v - vMin)/(vMax - vMin))*ih;
+
+  const linha = arr => arr.map((v,i)=> `${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const area = arr => linha(arr) + ` L${x(arr.length-1).toFixed(1)},${(T+ih).toFixed(1)} L${x(0).toFixed(1)},${(T+ih).toFixed(1)} Z`;
+
+  // linhas de grade horizontais
+  const nGrade = 4;
+  let grade = '';
+  for(let i=0;i<=nGrade;i++){
+    const v = vMin + (vMax-vMin)*(i/nGrade);
+    const yy = y(v);
+    grade += `<line x1="${L}" y1="${yy.toFixed(1)}" x2="${L+iw}" y2="${yy.toFixed(1)}" stroke="var(--linha2)" stroke-width="1"/>`;
+    grade += `<text x="${L-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--sub)" font-family="ui-monospace,monospace">${
+      v.toLocaleString('pt-BR',{maximumFractionDigits:0})}</text>`;
+  }
+
+  // rótulos de data (primeiro, meio, último)
+  const idxRotulos = s.length<=3 ? s.map((_,i)=>i) : [0, Math.floor((s.length-1)/2), s.length-1];
+  let rotulosX = '';
+  for(const i of idxRotulos){
+    rotulosX += `<text x="${x(i).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="10" fill="var(--sub)" font-family="ui-monospace,monospace">${fmtData(s[i].data)}</text>`;
+  }
+
+  const ultimoPat = patrimonio[patrimonio.length-1];
+  const ultimoInv = investido[investido.length-1];
+  const ganho = ultimoPat - ultimoInv;
+
+  cont.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:100%">
+      ${grade}
+      <path d="${area(patrimonio)}" fill="var(--ok)" opacity="0.10"/>
+      <path d="${linha(investido)}" fill="none" stroke="var(--sub)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <path d="${linha(patrimonio)}" fill="none" stroke="var(--tinta)" stroke-width="2"/>
+      ${patrimonio.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="var(--tinta)"/>`).join('')}
+      ${rotulosX}
+    </svg>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;font-size:12px">
+      <span><span style="display:inline-block;width:18px;height:2px;background:var(--tinta);vertical-align:middle"></span>
+        Patrimônio: <b class="num">${fmtMoeda(ultimoPat)}</b></span>
+      <span><span style="display:inline-block;width:18px;height:0;border-top:2px dashed var(--sub);vertical-align:middle"></span>
+        Aportado: <b class="num">${fmtMoeda(ultimoInv)}</b></span>
+      <span>Diferença: <b class="num ${classeSinal(ganho)}">${fmtMoeda(ganho)}</b></span>
+    </div>
+    <p class="nota">
+      A diferença entre as duas linhas é o resultado da carteira: valorização mais proventos,
+      menos custos. Não confundir com a TIR, que anualiza esse resultado considerando quando
+      cada aporte entrou.
+    </p>`;
+}
+
+function renderPosicoes(){
+  const tbody = document.querySelector('#tabelaPosicoes tbody');
+  tbody.innerHTML='';
+  const calc = todasPosicoesCalculadas().sort((a,b)=> a.pos.dataAbertura < b.pos.dataAbertura ? 1 : -1);
+  document.getElementById('msgSemPosicoes2').classList.toggle('oculto', calc.length>0);
+
+  for(const c of calc){
+    const distTxt = c.distMax!==null ? `${fmtPct(c.distMax,0)} da máx · ${c.distMin!==null?fmtPct(c.distMin,0):'—'} da mín` : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${c.pos.ticker}${c.infoPreco&&c.infoPreco.suspeitaDeslistagem?' <span class="badge-desl">deslistagem?</span>':''}</td>
+      <td><span class="tag ${c.pos.status}">${c.pos.status}</span></td>
+      <td>${c.pos.status==='encerrada'?'—':(c.pos.elegivel?'sim':'não')}</td>
+      <td class="num">${c.qtd}</td>
+      <td class="num">${fmtMoeda(c.precoMedio)}</td>
+      <td class="num">${c.precoAtual!==null?fmtMoeda(c.precoAtual)+(c.infoPreco?` (${fmtData(c.infoPreco.dataUltimoValido)})`:''):'—'}</td>
+      <td class="num">${c.valorMercado!==null?fmtMoeda(c.valorMercado):'—'}</td>
+      <td class="num ${classeSinal(c.rentabilidade)}">${c.rentabilidade!==null?fmtPct(c.rentabilidade,1):'—'}</td>
+      <td class="num ${classeSinal(c.rentabilidadeReais)}">${c.rentabilidadeReais!==null?fmtMoeda(c.rentabilidadeReais):'—'}</td>
+      <td>${fmtData(c.pos.dataAbertura)}</td>
+      <td>${fmtData(c.aniversario)}</td>
+      <td>${distTxt}</td>
+      <td>${c.pos.status==='incompleta'?`<button class="acao pequeno secundario" data-completar="${c.pos.id}">Completar</button>`:''}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  tbody.querySelectorAll('[data-completar]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const pos = estado.posicoes.find(p=>p.id===btn.dataset.completar);
+      document.getElementById('cTicker').value = pos.ticker;
+      document.getElementById('cEmpresa').value = pos.empresa||'';
+      document.getElementById('cSetor').value = pos.setor||'';
+      document.getElementById('cData').value = hoje();
+      mudarTela('lancamentos');
+      mudarSubTela('compra');
+      mostrarSugestaoAlocacao();
+    });
+  });
+}
+
+function renderSelectPosicoesVenda(){
+  const sel = document.getElementById('vPosicao');
+  sel.innerHTML = '<option value="">Selecione…</option>';
+  for(const p of estado.posicoes){
+    if(p.status==='encerrada') continue;
+    const c = calcularPosicao(p);
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.ticker} — ${c.qtd} un. — PM ${fmtMoeda(c.precoMedio)}`;
+    sel.appendChild(opt);
+  }
+}
+
+function mostrarSugestaoAlocacao(){
+  const div = document.getElementById('sugestaoAlocacao');
+  const incompleta = posicaoIncompletaMaisAntigaElegivel();
+  if(incompleta){
+    div.classList.remove('oculto');
+    div.innerHTML = `Prioridade (spec 2.1): há posição incompleta elegível em aberto — <b>${incompleta.ticker}</b>, aberta em ${fmtData(incompleta.dataAbertura)}. Complete-a antes de abrir posição nova.`;
+  } else {
+    div.classList.add('oculto');
+  }
+}
+
+function renderConfig(){
+  const campos = [
+    ['janelaComplementacaoMeses','Janela de complementação (meses)'],
+    ['metaPosicoes','Meta de posições'],
+    ['topN','Corte de elegibilidade (top N do ranking)'],
+    ['mesesRotacao','Meses até rotação'],
+    ['limiteIsencaoMensal','Limite de isenção mensal de IR (R$)'],
+    ['aliquotaGanho','Alíquota sobre ganho (ex.: 0.15)'],
+    ['tetoSetorPercentual','Teto por setor (%)'],
+    ['falhasParaSuspeitaDeslistagem','Falhas consecutivas p/ suspeita de deslistagem']
+  ];
+  const cont = document.getElementById('listaConfig');
+  cont.innerHTML='';
+  for(const [chave,rotulo] of campos){
+    const linha = document.createElement('div');
+    linha.className='config-linha';
+    linha.innerHTML = `<label>${rotulo}</label><input type="number" step="any" data-config="${chave}" value="${estado.config[chave]}">
+      <span class="verif">verificado 04/08/2026</span>`;
+    cont.appendChild(linha);
+  }
+  cont.querySelectorAll('[data-config]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      estado.config[inp.dataset.config] = parseFloat(inp.value);
+      salvarEstado();
+      render();
+    });
+  });
+}
+
+function renderStatusBackup(){
+  const data = localStorage.getItem(CHAVE_BACKUP_DATA);
+  const el = document.getElementById('statusBackup');
+  el.textContent = data ? `Último backup exportado em ${fmtData(data)}.` : 'Nenhum backup exportado ainda. Exporte agora.';
+}
+
+/* ==========================================================================
+   NAVEGAÇÃO
+   ========================================================================== */
+
+function mudarTela(nome){
+  document.querySelectorAll('#navPrincipal button').forEach(b=>b.classList.toggle('ativo', b.dataset.tela===nome));
+  document.querySelectorAll('section.tela').forEach(s=>s.classList.toggle('ativa', s.id==='tela-'+nome));
+  render();
+}
+document.querySelectorAll('#navPrincipal button').forEach(b=>{
+  b.addEventListener('click', ()=>mudarTela(b.dataset.tela));
+});
+
+function mudarSubTela(nome){
+  document.querySelectorAll('#subTabsLanc button').forEach(b=>b.classList.toggle('ativo', b.dataset.sub===nome));
+  document.querySelectorAll('.sub-tela').forEach(s=>s.classList.toggle('oculto', s.id!=='sub-'+nome));
+}
+document.querySelectorAll('#subTabsLanc button').forEach(b=>{
+  b.addEventListener('click', ()=>mudarSubTela(b.dataset.sub));
+});
+
+document.getElementById('eTipo').addEventListener('change', (e)=>{
+  const bonif = e.target.value==='bonificacao';
+  document.getElementById('campoFator').classList.toggle('oculto', bonif);
+  document.getElementById('campoQtdBonif').classList.toggle('oculto', !bonif);
+});
+
+/* ==========================================================================
+   FORMULÁRIOS
+   ========================================================================== */
+
+document.getElementById('cTicker').addEventListener('input', mostrarSugestaoAlocacao);
+
+document.getElementById('formCompra').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const ticker = document.getElementById('cTicker').value.toUpperCase().trim();
+  const info = estado.precos[ticker];
+  if(info && info.suspeitaDeslistagem){
+    if(!confirm(`${ticker} está marcado com suspeita de deslistagem (preço não retorna há ${info.falhasConsecutivas} importações). Confirmar compra mesmo assim?`)) return;
+  }
+
+  let pos = estado.posicoes.find(p => p.ticker===ticker && p.status!=='encerrada');
+  const data = document.getElementById('cData').value;
+
+  if(!pos){
+    pos = {
+      id: uuid(), ticker, empresa: document.getElementById('cEmpresa').value,
+      setor: document.getElementById('cSetor').value, dataAbertura: data,
+      dataFimJanelaComplementacao: addMeses(data, estado.config.janelaComplementacaoMeses),
+      status: 'incompleta', elegivel: true,
+      rankingNaAbertura: parseInt(document.getElementById('cRanking').value)||null,
+      notaConformidade: document.getElementById('cConformidade').value
+    };
+    estado.posicoes.push(pos);
+  } else if(document.getElementById('cConformidade').value){
+    pos.notaConformidade = document.getElementById('cConformidade').value;
+  }
+
+  estado.lotes.push({
+    id: uuid(), posicaoId: pos.id, tipo:'compra', data,
+    quantidade: parseFloat(document.getElementById('cQtd').value),
+    precoUnitario: parseFloat(document.getElementById('cPreco').value),
+    custos: parseFloat(document.getElementById('cCustos').value)||0,
+    observacao:''
+  });
+
+  // Contabilidade do caixa (fronteira da TIR = ações + caixa, spec 4.3):
+  // o valor gasto na compra sai do caixa. Se não houver saldo suficiente,
+  // o dinheiro veio de fora e ainda não foi registrado — a ferramenta
+  // registra o aporte implícito, em vez de deixar o caixa negativo (o que
+  // tornava "Valor total" enganoso e a TIR incalculável por falta de fluxo).
+  const gastoCompra = parseFloat(document.getElementById('cQtd').value) * parseFloat(document.getElementById('cPreco').value)
+    + (parseFloat(document.getElementById('cCustos').value)||0);
+
+  const saldoAntes = estado.caixa.saldo || 0;
+  if(gastoCompra > saldoAntes){
+    const falta = gastoCompra - saldoAntes;
+    const registrar = confirm(
+      `Esta compra custa ${fmtMoeda(gastoCompra)} e o caixa tem ${fmtMoeda(saldoAntes)}.\n\n` +
+      `Registrar um aporte de ${fmtMoeda(falta)} nesta data?\n\n` +
+      `Sem isso o caixa fica negativo e a TIR não pode ser calculada, ` +
+      `porque não há entrada de dinheiro registrada.`
+    );
+    if(registrar){
+      estado.fluxosExternos.push({ id: uuid(), data, tipo:'aporte', valor: falta });
+      estado.caixa.saldo += falta;
+      estado.caixa.movimentos.push({ data, valor: falta, origem:'aporte' });
+    }
+  }
+
+  estado.caixa.saldo -= gastoCompra;
+  estado.caixa.movimentos.push({ data, valor: -gastoCompra, origem:'compra' });
+  registrarSnapshotValor();
+
+  // status: se essa era a 1a compra, ela nasce incompleta; usuário marca
+  // "completa" manualmente quando considerar atingido o tamanho desejado
+  // (Módulo 1 não impõe um valor-alvo numérico — isso é decisão sua a cada mês).
+
+  salvarEstado();
+  e.target.reset();
+  document.getElementById('sugestaoAlocacao').classList.add('oculto');
+  mudarTela('posicoes');
+  alert(`Compra lançada. Posição ${ticker} está como "incompleta" — marque como completa na tela Posições quando considerar o tamanho adequado.`);
+});
+
+document.getElementById('vPosicao').addEventListener('change', atualizarPreviaGanho);
+document.getElementById('vQtd').addEventListener('input', atualizarPreviaGanho);
+document.getElementById('vPreco').addEventListener('input', atualizarPreviaGanho);
+document.getElementById('vCustos').addEventListener('input', atualizarPreviaGanho);
+function atualizarPreviaGanho(){
+  const posId = document.getElementById('vPosicao').value;
+  const div = document.getElementById('previaGanho');
+  if(!posId){ div.textContent=''; return; }
+  const pos = estado.posicoes.find(p=>p.id===posId);
+  const c = calcularPosicao(pos);
+  const qtd = parseFloat(document.getElementById('vQtd').value)||0;
+  const preco = parseFloat(document.getElementById('vPreco').value)||0;
+  const custos = parseFloat(document.getElementById('vCustos').value)||0;
+  if(qtd<=0 || preco<=0){ div.textContent=''; return; }
+  const ganho = (preco*qtd - custos) - (c.precoMedio*qtd);
+  div.innerHTML = `<span class="nota">Ganho estimado nesta venda: <b class="${classeSinal(ganho)}">${fmtMoeda(ganho)}</b> (preço médio atual: ${fmtMoeda(c.precoMedio)})</span>`;
+}
+
+document.getElementById('formVenda').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const posId = document.getElementById('vPosicao').value;
+  const pos = estado.posicoes.find(p=>p.id===posId);
+  const c = calcularPosicao(pos);
+  const qtd = parseFloat(document.getElementById('vQtd').value);
+  if(qtd > c.qtd){ alert(`Quantidade maior que a posição atual (${c.qtd}).`); return; }
+
+  estado.lotes.push({
+    id: uuid(), posicaoId: pos.id, tipo:'venda', data: document.getElementById('vData').value,
+    quantidade: qtd, precoUnitario: parseFloat(document.getElementById('vPreco').value),
+    custos: parseFloat(document.getElementById('vCustos').value)||0, observacao:''
+  });
+
+  // Contabilidade do caixa: o produto líquido da venda entra no caixa
+  // (fronteira da TIR = ações + caixa, spec 4.3).
+  const dataVenda = document.getElementById('vData').value;
+  const produtoVenda = qtd * parseFloat(document.getElementById('vPreco').value)
+    - (parseFloat(document.getElementById('vCustos').value)||0);
+  estado.caixa.saldo += produtoVenda;
+  estado.caixa.movimentos.push({ data: dataVenda, valor: produtoVenda, origem:'venda' });
+
+  if(qtd === c.qtd){ pos.status = 'encerrada'; }
+
+  registrarSnapshotValor();
+  salvarEstado();
+  e.target.reset();
+  document.getElementById('previaGanho').textContent='';
+  mudarTela('posicoes');
+});
+
+document.getElementById('formEvento').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const tipo = document.getElementById('eTipo').value;
+  const evento = {
+    id: uuid(), ticker: document.getElementById('eTicker').value.toUpperCase().trim(),
+    data: document.getElementById('eData').value, tipo,
+    fator: tipo==='bonificacao' ? 1 : parseFloat(document.getElementById('eFator').value),
+    quantidadeConcedida: tipo==='bonificacao' ? parseFloat(document.getElementById('eQtdBonif').value)||0 : undefined,
+    custoTotal: parseFloat(document.getElementById('eCustoTotal').value)||0,
+    observacao: document.getElementById('eObs').value
+  };
+  estado.eventos.push(evento);
+  registrarSnapshotValor();
+  salvarEstado();
+  e.target.reset();
+  document.getElementById('campoFator').classList.remove('oculto');
+  document.getElementById('campoQtdBonif').classList.add('oculto');
+  mudarTela('posicoes');
+});
+
+document.getElementById('formProvento').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  estado.proventos.push({
+    id: uuid(), ticker: document.getElementById('pvTicker').value.toUpperCase().trim(),
+    dataPagamento: document.getElementById('pvData').value, tipo: document.getElementById('pvTipo').value,
+    valorBruto: parseFloat(document.getElementById('pvValor').value),
+    irRetido: parseFloat(document.getElementById('pvIR').value)||0
+  });
+  const valorLiquido = parseFloat(document.getElementById('pvValor').value) - (parseFloat(document.getElementById('pvIR').value)||0);
+  estado.caixa.saldo += valorLiquido;
+  estado.caixa.movimentos.push({ data: document.getElementById('pvData').value, valor: valorLiquido, origem:'provento' });
+  registrarSnapshotValor();
+  salvarEstado();
+  e.target.reset();
+  mudarTela('painel');
+});
+
+document.getElementById('formAporte').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const tipo = document.getElementById('apTipo').value;
+  const valor = parseFloat(document.getElementById('apValor').value);
+  const data = document.getElementById('apData').value;
+  estado.fluxosExternos.push({ id: uuid(), data, tipo, valor });
+  estado.caixa.saldo += (tipo==='aporte'? valor : -valor);
+  estado.caixa.movimentos.push({ data, valor: tipo==='aporte'?valor:-valor, origem: tipo });
+  registrarSnapshotValor();
+  salvarEstado();
+  e.target.reset();
+  mudarTela('painel');
+});
+
+document.getElementById('formPrecoManual').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const ticker = document.getElementById('mpTicker').value.toUpperCase().trim();
+  if(!estado.precos[ticker]) estado.precos[ticker] = {ultimoValido:null,dataUltimoValido:null,maxima52:null,minima52:null,falhasConsecutivas:0,suspeitaDeslistagem:false};
+  const info = estado.precos[ticker];
+  info.ultimoValido = parseFloat(document.getElementById('mpPreco').value);
+  info.dataUltimoValido = hoje();
+  info.falhasConsecutivas = 0;
+  info.suspeitaDeslistagem = false;
+  const max52 = document.getElementById('mpMax52').value;
+  const min52 = document.getElementById('mpMin52').value;
+  if(max52) info.maxima52 = parseFloat(max52);
+  if(min52) info.minima52 = parseFloat(min52);
+  registrarSnapshotValor();
+  salvarEstado();
+  e.target.reset();
+  render();
+  alert(`Preço de ${ticker} atualizado.`);
+});
+
+document.getElementById('btnImportarPrecos').addEventListener('click', ()=>{
+  const texto = document.getElementById('colarCSVPrecos').value.trim();
+  const arquivo = document.getElementById('arquivoCSVPrecos').files[0];
+  const divResultado = document.getElementById('resultadoImportacaoPrecos');
+
+  function processar(txt){
+    const r = importarCSVPrecos(txt);
+    if(!r.ok){ divResultado.innerHTML = `<div class="alerta critico">${r.msg}</div>`; return; }
+    let html = `<div class="alerta">${r.atualizados} de ${r.total} tickers atualizados.`;
+    if(r.semPreco>0) html += ` ${r.semPreco} sem preço nesta importação.`;
+    html += '</div>';
+    if(r.novosSuspeitos.length>0){
+      html += `<div class="alerta critico">Novos suspeitos de deslistagem: ${r.novosSuspeitos.join(', ')}. Compra bloqueada até verificação manual.</div>`;
+    }
+    divResultado.innerHTML = html;
+    render();
+  }
+
+  if(arquivo){
+    const reader = new FileReader();
+    reader.onload = ev => processar(ev.target.result);
+    reader.readAsText(arquivo, 'utf-8');
+  } else if(texto){
+    processar(texto);
+  } else {
+    divResultado.innerHTML = '<div class="alerta critico">Selecione um arquivo ou cole o conteúdo do CSV.</div>';
+  }
+});
+
+/* ==========================================================================
+   MÓDULO 2 — UI DE RANKING
+   ========================================================================== */
+
+let ultimoRanking = null; // resultado em memória da última importação desta sessão
+
+function popularListasFiltro(){
+  document.getElementById('listaFinanceiras').value = estado.listasFiltro.financeiras.join(', ');
+  document.getElementById('listaRecJudicial').value = estado.listasFiltro.recuperacaoJudicial.join(', ');
+  document.getElementById('pisoLiquidez').value = estado.config.pisoLiquidezDiaria;
+}
+
+document.getElementById('btnSalvarListas').addEventListener('click', ()=>{
+  const parseLista = s => s.split(',').map(t=>t.trim().toUpperCase()).filter(Boolean);
+  estado.listasFiltro.financeiras = parseLista(document.getElementById('listaFinanceiras').value);
+  estado.listasFiltro.recuperacaoJudicial = parseLista(document.getElementById('listaRecJudicial').value);
+  estado.config.pisoLiquidezDiaria = parseFloat(document.getElementById('pisoLiquidez').value) || 0;
+  salvarEstado();
+  alert('Listas e piso de liquidez salvos. Reimporte o CSV para aplicar às novas exclusões.');
+});
+
+document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
+  const texto = document.getElementById('colarCSVRanking').value.trim();
+  const arquivo = document.getElementById('arquivoCSVRanking').files[0];
+  const divResultado = document.getElementById('resultadoImportacaoRanking');
+
+  function processar(txt){
+    const r = processarRanking(txt, document.getElementById('criterioRanking').value);
+    if(!r.ok){ divResultado.innerHTML = `<div class="alerta critico">${r.msg}</div>`; document.getElementById('blocoRanking').classList.add('oculto'); return; }
+
+    ultimoRanking = r;
+    estado.snapshotsRanking.push({
+      data: hoje(), origem: 'statusinvest',
+      criterio: r.criterio,
+      linhas: r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco }))
+    });
+    salvarEstado();
+
+    const totalExcluidos = Object.values(r.excluidos).reduce((s,arr)=>s+arr.length,0);
+    divResultado.innerHTML = `<div class="alerta">${r.candidatos.length} empresas elegíveis, de ${r.totalLinhas} lidas no arquivo (${totalExcluidos} excluídas — detalhe abaixo).</div>`;
+
+    renderBlocoRanking(r);
+    document.getElementById('blocoRanking').classList.remove('oculto');
+  }
+
+  if(arquivo){
+    const reader = new FileReader();
+    reader.onload = ev => processar(ev.target.result);
+    reader.readAsText(arquivo, 'utf-8');
+  } else if(texto){
+    processar(texto);
+  } else {
+    divResultado.innerHTML = '<div class="alerta critico">Selecione um arquivo ou cole o conteúdo do CSV.</div>';
+  }
+});
+
+function renderBlocoRanking(r){
+  const topN = estado.config.topN;
+  document.getElementById('topNLabel').textContent = 'top ' + topN;
+  const ehPlRoe = r.criterio==='pl_roe';
+  document.getElementById('thFator1').textContent = ehPlRoe ? 'P/L' : 'EV/EBIT';
+  document.getElementById('thFator2').textContent = ehPlRoe ? 'ROE' : 'ROIC';
+
+  // resumo de exclusões, no estilo do diagnóstico que validou os filtros
+  const resumo = document.getElementById('resumoExclusoes');
+  const linhasResumo = Object.entries(r.excluidos)
+    .filter(([,arr])=>arr.length>0)
+    .sort((a,b)=>b[1].length-a[1].length)
+    .map(([motivo,arr])=>{
+      const amostra = arr.slice(0,8).join(', ') + (arr.length>8?'…':'');
+      return `<div style="margin-bottom:6px"><b>${motivo}:</b> ${arr.length} — ${amostra}</div>`;
+    }).join('');
+  resumo.innerHTML = linhasResumo || '<div class="nota">Nenhuma exclusão nesta importação.</div>';
+
+  // tabela de ranking
+  const detidos = tickersDetidos(); // raiz -> ticker detido
+  const idxCorte = Math.min(topN, r.candidatos.length) - 1;
+  const corteAtual = r.candidatos[idxCorte] ? r.candidatos[idxCorte].evEbit : null;
+  const tbody = document.querySelector('#tabelaRanking tbody');
+  tbody.innerHTML = '';
+  for(const c of r.candidatos){
+    const dentroTopN = c.posicao <= topN;
+    const raiz = raizTicker(c.ticker);
+    const jaDetido = detidos[raiz];
+    const tr = document.createElement('tr');
+    if(!dentroTopN) tr.style.opacity = '0.4';
+    if(dentroTopN && !jaDetido) tr.style.fontWeight = '600';
+    tr.innerHTML = `
+      <td class="num">${c.posicao}</td>
+      <td>${c.ticker}</td>
+      <td>${jaDetido ? '<span class="tag completa">detida ('+jaDetido+')</span>' : ''}</td>
+      <td class="num">${c.fator1.toFixed(2)}</td>
+      <td class="num">${fmtPct(c.fator2/100,1)}</td>
+      <td class="num">${c.soma}</td>
+      <td class="num">${c.dy!==null?c.dy.toFixed(1)+'%':'—'}${c.dy!==null && c.dy>30?' <span class="badge-desl">alto</span>':''}</td>
+      <td class="num">${(c.preco!==null && r.criterio!=='pl_roe')?fmtMoeda(precoAlvoFormulaico(c.evEbit, c.preco, corteAtual)):'—'}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+document.getElementById('btnAplicarElegibilidade').addEventListener('click', ()=>{
+  if(!ultimoRanking){ alert('Importe um CSV primeiro nesta sessão.'); return; }
+  const topN = estado.config.topN;
+  const raizesElegiveis = new Set(ultimoRanking.candidatos.filter(c=>c.posicao<=topN).map(c=>raizTicker(c.ticker)));
+
+  let alterados = 0;
+  const detalhes = [];
+  for(const p of estado.posicoes){
+    if(p.status==='encerrada') continue;
+    const elegivelAntes = p.elegivel;
+    const elegivelAgora = raizesElegiveis.has(raizTicker(p.ticker));
+    if(elegivelAntes !== elegivelAgora){
+      p.elegivel = elegivelAgora;
+      alterados++;
+      detalhes.push(`${p.ticker}: ${elegivelAntes?'elegível':'não elegível'} → ${elegivelAgora?'elegível':'não elegível'}`);
+    }
+  }
+  salvarEstado();
+  render();
+
+  const nota = document.getElementById('notaAplicacaoElegibilidade');
+  nota.textContent = alterados===0
+    ? 'Nenhuma posição detida mudou de elegibilidade neste ranking.'
+    : `${alterados} posição(ões) atualizada(s): ${detalhes.join(' · ')}`;
+});
+
+/* ==========================================================================
+   CONFIGURAÇÃO — BACKUP / DESFAZER / LIMPAR
+   ========================================================================== */
+
+document.getElementById('btnExportar').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(estado, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `carteira-formula-magica-${hoje()}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  localStorage.setItem(CHAVE_BACKUP_DATA, hoje());
+  renderStatusBackup();
+});
+
+document.getElementById('arquivoImportarJSON').addEventListener('change', (e)=>{
+  const arquivo = e.target.files[0];
+  if(!arquivo) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const obj = JSON.parse(ev.target.result);
+      if(obj.versaoSchema !== VERSAO_SCHEMA){
+        alert(`Arquivo de versão de schema incompatível (esperado ${VERSAO_SCHEMA}, recebido ${obj.versaoSchema}). Importação recusada para não corromper dados.`);
+        return;
+      }
+      if(!confirm('Importar este backup vai substituir todos os dados atuais. Confirmar?')) return;
+      estado = obj;
+      salvarEstado();
+      render();
+      alert('Backup importado com sucesso.');
+    }catch(err){
+      alert('Não foi possível ler o arquivo: '+err.message);
+    }
+  };
+  reader.readAsText(arquivo, 'utf-8');
+  e.target.value = '';
+});
+
+function abrirDialogo(titulo, texto, aoConfirmar){
+  const dlg = document.getElementById('dlgConfirmacao');
+  document.getElementById('dlgTitulo').textContent = titulo;
+  document.getElementById('dlgTexto').textContent = texto;
+  dlg.showModal();
+  const btnConf = document.getElementById('dlgConfirmar');
+  const handler = ()=>{ dlg.close(); btnConf.removeEventListener('click',handler); aoConfirmar(); };
+  btnConf.addEventListener('click', handler);
+  document.getElementById('dlgCancelar').addEventListener('click', ()=>dlg.close(), {once:true});
+}
+
+document.getElementById('btnDesfazer').addEventListener('click', ()=>{
+  if(!estadoAnterior){ alert('Nada para desfazer nesta sessão.'); return; }
+  abrirDialogo('Desfazer última alteração', 'Isso reverte o estado para antes do último lançamento. Confirmar?', ()=>{
+    estado = estadoAnterior;
+    estadoAnterior = null;
+    salvarEstado(false);
+    render();
+  });
+});
+
+document.getElementById('btnLimparTudo').addEventListener('click', ()=>{
+  abrirDialogo('Apagar todos os dados', 'Isso apaga permanentemente todos os lançamentos locais. Exporte um backup antes, se ainda não exportou. Confirmar?', ()=>{
+    estado = estadoPadrao();
+    salvarEstado();
+    render();
+  });
+});
+
+/* ==========================================================================
+   IMPORTADOR DE NOTA DE CORRETAGEM
+   A nota traz "especificação do título" (nome + classe), não o ticker, e os
+   custos vêm somados para a nota inteira. O parser extrai os negócios, o
+   usuário confirma o ticker, e os custos são rateados proporcionalmente ao
+   valor financeiro de cada negócio — critério da Receita para compor o
+   custo de aquisição.
+   Layouts variam entre corretoras e entre versões de PDF, então o parser é
+   tolerante e SEMPRE exige conferência visual antes de gravar.
+   ========================================================================== */
+
+let notaLida = null;
+
+function normalizarEspecificacao(txt){
+  return txt.replace(/\s+/g,' ').trim().toUpperCase();
+}
+
+function parseNotaCorretagem(texto){
+  const linhas = texto.replace(/\r/g,'').split('\n');
+  const negocios = [];
+
+  for(const linhaBruta of linhas){
+    const l = linhaBruta.replace(/\s+/g,' ').trim();
+    if(!l) continue;
+
+    // Uma linha de negócio tem: ... C ou V ... tipo de mercado ...
+    // especificação ... quantidade ... preço ... valor ... D ou C
+    // Estratégia: localizar o indicador de compra/venda e os três últimos
+    // números da linha (quantidade, preço, valor da operação).
+    if(!/\b(BOVESPA|BMF|B3)\b/i.test(l)) continue;
+
+    const mCV = l.match(/\b(BOVESPA|BMF|B3)\s+([CV])\b/i);
+    if(!mCV) continue;
+    const tipo = mCV[2].toUpperCase()==='C' ? 'compra' : 'venda';
+
+    // números no formato brasileiro
+    const numeros = l.match(/\d{1,3}(?:\.\d{3})*,\d{2}|\b\d+\b/g);
+    if(!numeros || numeros.length < 3) continue;
+    const ultimos = numeros.slice(-3);
+    const quantidade = numBR(ultimos[0]);
+    const preco = numBR(ultimos[1]);
+    const valor = numBR(ultimos[2]);
+    if(!quantidade || !preco || !valor) continue;
+
+    // sanidade: valor deve bater aproximadamente com qtd * preço
+    if(Math.abs(quantidade*preco - valor) > Math.max(0.05, valor*0.02)) continue;
+
+    // especificação: trecho entre o tipo de mercado e o primeiro número
+    let resto = l.slice(mCV.index + mCV[0].length);
+    resto = resto.replace(/^\s*(FRACIONARIO|FRACIONÁRIO|VISTA|A VISTA|TERMO|OPCAO|OPÇÃO)\s*/i,'');
+    const posNum = resto.search(/\d/);
+    let especificacao = posNum>0 ? resto.slice(0,posNum) : resto;
+    especificacao = normalizarEspecificacao(especificacao.replace(/\b(D|C|D#|D#2)\b\s*$/,''));
+    if(!especificacao) continue;
+
+    negocios.push({ tipo, especificacao, quantidade, preco, valor });
+  }
+
+  if(negocios.length===0) return { ok:false, msg:'Não consegui identificar linhas de negócio no texto colado. Confira se copiou a seção "Negócios realizados" do PDF.' };
+
+  // consolidar execuções parciais do mesmo título e mesmo sentido
+  const agrupado = {};
+  for(const n of negocios){
+    const chave = n.tipo + '|' + n.especificacao;
+    if(!agrupado[chave]) agrupado[chave] = { tipo:n.tipo, especificacao:n.especificacao, quantidade:0, valor:0 };
+    agrupado[chave].quantidade += n.quantidade;
+    agrupado[chave].valor += n.valor;
+  }
+  const consolidado = Object.values(agrupado).map(g=>({
+    ...g,
+    preco: g.valor / g.quantidade,
+    ticker: estado.mapaTitulos[g.especificacao] || '',
+    usar: true
+  }));
+
+  return { ok:true, negocios: consolidado, linhasBrutas: negocios.length };
+}
+
+function renderTabelaNota(){
+  const tbody = document.querySelector('#tabelaNota tbody');
+  tbody.innerHTML = '';
+  const totalCustos = parseFloat(document.getElementById('notaCustos').value) || 0;
+  const somaValores = notaLida.negocios.filter(n=>n.usar).reduce((s,n)=>s+n.valor,0);
+
+  notaLida.negocios.forEach((n,i)=>{
+    // rateio proporcional ao valor financeiro
+    n.custoRateado = (n.usar && somaValores>0) ? totalCustos * (n.valor/somaValores) : 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" data-usar="${i}" ${n.usar?'checked':''}></td>
+      <td>${n.especificacao}</td>
+      <td><input type="text" data-ticker="${i}" value="${n.ticker}" style="width:90px" placeholder="ex.: ETER3"></td>
+      <td>${n.tipo==='compra'?'Compra':'Venda'}</td>
+      <td class="num">${n.quantidade}</td>
+      <td class="num">${fmtMoeda(n.preco)}</td>
+      <td class="num">${fmtMoeda(n.valor)}</td>
+      <td class="num">${fmtMoeda(n.custoRateado)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[data-usar]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{ notaLida.negocios[cb.dataset.usar].usar = cb.checked; renderTabelaNota(); });
+  });
+  tbody.querySelectorAll('[data-ticker]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ notaLida.negocios[inp.dataset.ticker].ticker = inp.value.toUpperCase().trim(); });
+  });
+}
+
+function renderMapaTitulos(){
+  const cont = document.getElementById('listaMapaTitulos');
+  const entradas = Object.entries(estado.mapaTitulos);
+  if(entradas.length===0){ cont.innerHTML = '<div class="nota">Nenhuma correspondência aprendida ainda.</div>'; return; }
+  cont.innerHTML = entradas.map(([esp,tick])=>
+    `<div style="display:flex;gap:10px;align-items:center;padding:3px 0;font-size:13px">
+       <span style="flex:1">${esp}</span><b>${tick}</b>
+       <button class="acao pequeno perigo" data-remover-mapa="${esp}">remover</button>
+     </div>`).join('');
+  cont.querySelectorAll('[data-remover-mapa]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      delete estado.mapaTitulos[b.dataset.removerMapa];
+      salvarEstado(); renderMapaTitulos();
+    });
+  });
+}
+
+document.getElementById('btnLerNota').addEventListener('click', ()=>{
+  const texto = document.getElementById('textoNota').value;
+  const div = document.getElementById('resultadoLeituraNota');
+  if(!texto.trim()){ div.innerHTML = '<div class="alerta critico">Cole o texto da nota primeiro.</div>'; return; }
+
+  const r = parseNotaCorretagem(texto);
+  if(!r.ok){ div.innerHTML = `<div class="alerta critico">${r.msg}</div>`; document.getElementById('blocoConferenciaNota').classList.add('oculto'); return; }
+
+  notaLida = r;
+  const semTicker = r.negocios.filter(n=>!n.ticker).length;
+  div.innerHTML = `<div class="alerta">${r.linhasBrutas} linha(s) de negócio lidas, consolidadas em ${r.negocios.length} operação(ões).`
+    + (semTicker>0 ? ` <b>${semTicker} sem ticker</b> — preencha abaixo.` : '') + '</div>';
+  renderTabelaNota();
+  document.getElementById('blocoConferenciaNota').classList.remove('oculto');
+});
+
+document.getElementById('notaCustos').addEventListener('input', ()=>{ if(notaLida) renderTabelaNota(); });
+
+document.getElementById('btnConfirmarNota').addEventListener('click', ()=>{
+  if(!notaLida) return;
+  const data = document.getElementById('notaData').value;
+  if(!data){ alert('Informe a data do pregão.'); return; }
+
+  const usar = notaLida.negocios.filter(n=>n.usar);
+  const semTicker = usar.filter(n=>!n.ticker);
+  if(semTicker.length>0){ alert('Há operações sem ticker: '+semTicker.map(n=>n.especificacao).join(', ')); return; }
+
+  let lancadas = 0, ignoradas = [];
+  for(const n of usar){
+    // aprende a correspondência
+    estado.mapaTitulos[n.especificacao] = n.ticker;
+
+    if(n.tipo==='compra'){
+      let pos = estado.posicoes.find(p=>p.ticker===n.ticker && p.status!=='encerrada');
+      if(!pos){
+        pos = { id: uuid(), ticker:n.ticker, empresa:'', setor:'', dataAbertura:data,
+                dataFimJanelaComplementacao: addMeses(data, estado.config.janelaComplementacaoMeses),
+                status:'incompleta', elegivel:true, rankingNaAbertura:null, notaConformidade:'' };
+        estado.posicoes.push(pos);
+      }
+      estado.lotes.push({ id:uuid(), posicaoId:pos.id, tipo:'compra', data,
+        quantidade:n.quantidade, precoUnitario:n.preco, custos:n.custoRateado, observacao:'nota de corretagem' });
+      estado.caixa.saldo -= (n.valor + n.custoRateado);
+      estado.caixa.movimentos.push({ data, valor:-(n.valor+n.custoRateado), origem:'compra' });
+      lancadas++;
+    } else {
+      const pos = estado.posicoes.find(p=>p.ticker===n.ticker && p.status!=='encerrada');
+      if(!pos){ ignoradas.push(n.ticker+' (venda sem posição aberta)'); continue; }
+      const c = calcularPosicao(pos);
+      if(n.quantidade > c.qtd){ ignoradas.push(n.ticker+' (venda de '+n.quantidade+' > posição de '+c.qtd+')'); continue; }
+      estado.lotes.push({ id:uuid(), posicaoId:pos.id, tipo:'venda', data,
+        quantidade:n.quantidade, precoUnitario:n.preco, custos:n.custoRateado, observacao:'nota de corretagem' });
+      estado.caixa.saldo += (n.valor - n.custoRateado);
+      estado.caixa.movimentos.push({ data, valor:(n.valor-n.custoRateado), origem:'venda' });
+      if(n.quantidade === c.qtd) pos.status = 'encerrada';
+      lancadas++;
+    }
+  }
+
+  registrarSnapshotValor();
+  salvarEstado();
+  notaLida = null;
+  document.getElementById('blocoConferenciaNota').classList.add('oculto');
+  document.getElementById('textoNota').value = '';
+  renderMapaTitulos();
+  render();
+
+  let msg = `${lancadas} operação(ões) lançada(s).`;
+  if(ignoradas.length>0) msg += `\n\nNão lançadas:\n- ` + ignoradas.join('\n- ');
+  msg += `\n\nAtenção: o caixa foi debitado/creditado pelas operações. Se o dinheiro veio de aporte novo, registre o aporte na aba correspondente.`;
+  alert(msg);
+});
+
+/* ==========================================================================
+   MÓDULO 3 — CALENDÁRIO DE ROTAÇÃO E FATIAMENTO FISCAL
+   ========================================================================== */
+
+function vendasDoMes(anoMes){
+  // soma do valor bruto de vendas de ações liquidadas no mês (base do limite
+  // de isenção, que incide sobre o TOTAL VENDIDO no mês, não sobre o lucro)
+  return estado.lotes
+    .filter(l => l.tipo==='venda' && l.data.slice(0,7)===anoMes)
+    .reduce((s,l)=> s + l.quantidade*l.precoUnitario, 0);
+}
+
+function renderCalendario(){
+  const limite = estado.config.limiteIsencaoMensal;
+  const mesAtual = hoje().slice(0,7);
+  const jaVendido = vendasDoMes(mesAtual);
+  const espaco = Math.max(0, limite - jaVendido);
+
+  document.getElementById('painelLimiteMes').innerHTML = `
+    <div style="display:flex;gap:28px;flex-wrap:wrap">
+      <div><div class="rot" style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub)">Vendido no mês</div>
+        <div class="num" style="font-size:18px;font-weight:600">${fmtMoeda(jaVendido)}</div></div>
+      <div><div class="rot" style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub)">Limite de isenção</div>
+        <div class="num" style="font-size:18px;font-weight:600">${fmtMoeda(limite)}</div></div>
+      <div><div class="rot" style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub)">Espaço restante</div>
+        <div class="num ${espaco>0?'pos':'neg'}" style="font-size:18px;font-weight:600">${fmtMoeda(espaco)}</div></div>
+    </div>
+    <p class="nota">
+      O limite incide sobre o total vendido no mês, não sobre o lucro. Acima dele, o ganho
+      é tributado à alíquota configurada (${fmtPct(estado.config.aliquotaGanho,0)}).
+      Parâmetro verificado em 04/08/2026 — há Medida Provisória em tramitação que pode
+      alterar isso; reconferir a cada semestre.
+    </p>`;
+
+  const calc = todasPosicoesCalculadas()
+    .filter(c=>c.pos.status!=='encerrada' && c.qtd>0)
+    .sort((a,b)=> (a.diasParaAniversario??99999) - (b.diasParaAniversario??99999));
+
+  document.getElementById('msgSemCalendario').classList.toggle('oculto', calc.length>0);
+
+  const tbody = document.querySelector('#tabelaCalendario tbody');
+  tbody.innerHTML = '';
+  for(const c of calc){
+    const vencida = c.diasParaAniversario!==null && c.diasParaAniversario<=0;
+    let sugestao, cor='';
+    if(!vencida){ sugestao = 'aguardar'; }
+    else if(c.pos.elegivel){ sugestao = 'manter — segue no ranking'; cor='pos'; }
+    else { sugestao = 'vender — saiu do ranking'; cor='neg'; }
+
+    const ganho = (c.valorMercado!==null) ? (c.valorMercado - c.precoMedio*c.qtd) : null;
+    const tr = document.createElement('tr');
+    if(vencida) tr.style.fontWeight='600';
+    tr.innerHTML = `
+      <td>${c.pos.ticker}</td>
+      <td>${fmtData(c.pos.dataAbertura)}</td>
+      <td>${fmtData(c.aniversario)}</td>
+      <td class="num">${c.diasParaAniversario!==null ? (vencida? 'vencido' : c.diasParaAniversario+' d') : '—'}</td>
+      <td>${c.pos.elegivel?'sim':'não'}</td>
+      <td class="${cor}">${sugestao}</td>
+      <td class="num">${c.valorMercado!==null?fmtMoeda(c.valorMercado):'—'}</td>
+      <td class="num ${classeSinal(ganho)}">${ganho!==null?fmtMoeda(ganho):'—'}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  // simulador
+  const tbodySim = document.querySelector('#tabelaSimulador tbody');
+  tbodySim.innerHTML = '';
+  for(const c of calc){
+    if(c.valorMercado===null) continue;
+    const ganho = c.valorMercado - c.precoMedio*c.qtd;
+    const sugerido = c.diasParaAniversario!==null && c.diasParaAniversario<=0 && !c.pos.elegivel;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" data-vender="${c.pos.id}" ${sugerido?'checked':''}></td>
+      <td>${c.pos.ticker}</td>
+      <td class="num">${c.qtd}</td>
+      <td class="num">${fmtMoeda(c.precoAtual)}</td>
+      <td class="num">${fmtMoeda(c.valorMercado)}</td>
+      <td class="num ${classeSinal(ganho)}">${fmtMoeda(ganho)}</td>`;
+    tbodySim.appendChild(tr);
+  }
+}
+
+document.getElementById('btnSimularFatiamento').addEventListener('click', ()=>{
+  const limite = estado.config.limiteIsencaoMensal;
+  const aliquota = estado.config.aliquotaGanho;
+  const selecionados = Array.from(document.querySelectorAll('[data-vender]:checked'))
+    .map(cb => estado.posicoes.find(p=>p.id===cb.dataset.vender))
+    .map(calcularPosicao)
+    .filter(c=>c.valorMercado!==null);
+
+  const div = document.getElementById('resultadoFatiamento');
+  if(selecionados.length===0){ div.innerHTML = '<div class="alerta">Marque ao menos uma posição.</div>'; return; }
+
+  // espaço já consumido no mês corrente
+  const mesAtual = hoje().slice(0,7);
+  let espacoMes = Math.max(0, limite - vendasDoMes(mesAtual));
+
+  // distribuição gulosa: maiores primeiro, para não fragmentar demais
+  const fila = [...selecionados].sort((a,b)=> b.valorMercado - a.valorMercado);
+  const meses = [];
+  let mesCorrente = { itens:[], total:0, espaco: espacoMes, indice:0 };
+
+  for(const c of fila){
+    if(c.valorMercado > mesCorrente.espaco && mesCorrente.itens.length>0){
+      meses.push(mesCorrente);
+      mesCorrente = { itens:[], total:0, espaco: limite, indice: meses.length };
+    }
+    mesCorrente.itens.push(c);
+    mesCorrente.total += c.valorMercado;
+    mesCorrente.espaco -= c.valorMercado;
+  }
+  if(mesCorrente.itens.length>0) meses.push(mesCorrente);
+
+  const totalVenda = selecionados.reduce((s,c)=>s+c.valorMercado,0);
+  const totalGanho = selecionados.reduce((s,c)=>s + (c.valorMercado - c.precoMedio*c.qtd), 0);
+
+  let html = `<div class="alerta">Total a vender: <b>${fmtMoeda(totalVenda)}</b> · Ganho estimado: <b class="${classeSinal(totalGanho)}">${fmtMoeda(totalGanho)}</b> · Distribuído em <b>${meses.length} mês(es)</b>.</div>`;
+
+  const dataBase = new Date(hoje()+'T00:00:00');
+  meses.forEach((m,i)=>{
+    const d = new Date(dataBase); d.setMonth(d.getMonth()+i);
+    const rotulo = d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    const ganhoMes = m.itens.reduce((s,c)=>s + (c.valorMercado - c.precoMedio*c.qtd), 0);
+    const excedeu = m.total > limite;
+    const imposto = excedeu && ganhoMes>0 ? ganhoMes*aliquota : 0;
+    html += `<div class="card" style="margin-top:8px">
+      <b>${rotulo}</b> — ${m.itens.length} venda(s), total ${fmtMoeda(m.total)}
+      ${excedeu ? `<span class="badge-desl"> excede o limite</span>` : ' <span class="tag completa">dentro da isenção</span>'}
+      <div style="margin-top:6px;font-size:13px">${m.itens.map(c=>`${c.pos.ticker} (${fmtMoeda(c.valorMercado)})`).join(' · ')}</div>
+      ${imposto>0 ? `<div class="nota">Imposto estimado neste mês: <b>${fmtMoeda(imposto)}</b></div>` : ''}
+    </div>`;
+  });
+
+  html += `<p class="nota">
+    Estimativa com base no preço atual armazenado, que pode estar desatualizado. O ganho real
+    depende do preço de execução. Uma posição isolada maior que o limite não tem como caber —
+    nesses casos, considere venda parcial em meses distintos, que a ferramenta ainda não
+    fraciona automaticamente.
+  </p>`;
+
+  div.innerHTML = html;
+});
+
+
+
+// datas padrão nos formulários = hoje
+['cData','vData','eData','pvData','apData','notaData'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.value = hoje();
+});
+
+/* ==========================================================================
+   MÓDULO 4 — PREÇO-TETO FORMULAICO E FAIXA DE ENTRADA
+   Estimativa derivada do método (não análise gráfica): a que preço o
+   EV/EBIT do papel igualaria o EV/EBIT de corte (última posição dentro do
+   topN) do último ranking importado. Assume que o EV varia proporcionalmente
+   ao preço — aproximação que ignora variação de dívida líquida no curto
+   prazo. Informação de contexto; a saída do método continua sendo por
+   tempo (aniversário), nunca por preço-alvo.
+   ========================================================================== */
+
+function ultimoSnapshotRanking(){
+  if(estado.snapshotsRanking.length===0) return null;
+  return estado.snapshotsRanking[estado.snapshotsRanking.length-1];
+}
+
+function evEbitDeCorte(snapshot){
+  if(!snapshot || snapshot.linhas.length===0) return null;
+  const topN = estado.config.topN;
+  const idx = Math.min(topN, snapshot.linhas.length) - 1;
+  const ordenado = [...snapshot.linhas].sort((a,b)=>a.posicao-b.posicao);
+  return ordenado[idx] ? ordenado[idx].evEbit : null;
+}
+
+// Núcleo do cálculo: dado o EV/EBIT e preço de um papel NO MOMENTO DO
+// RANKING, e o EV/EBIT de corte desse mesmo ranking, estima o preço em que
+// o papel cruzaria a linha de corte. Serve nos dois sentidos: se o papel
+// está hoje dentro do topN (EV/EBIT menor que o corte), o resultado é um
+// TETO (preço acima do qual sairia do topN); se está fora (EV/EBIT maior
+// que o corte), o resultado é uma FAIXA DE ENTRADA (preço abaixo do qual
+// entraria no topN).
+function precoAlvoFormulaico(evEbitPapel, precoNoSnapshot, evEbitCorte){
+  if(!evEbitPapel || evEbitPapel<=0 || !precoNoSnapshot || !evEbitCorte) return null;
+  return precoNoSnapshot * (evEbitCorte / evEbitPapel);
+}
+
+function contextoParaTicker(ticker){
+  const snapshot = ultimoSnapshotRanking();
+  if(!snapshot) return null;
+  const raiz = raizTicker(ticker);
+  const linha = snapshot.linhas.find(l=>raizTicker(l.ticker)===raiz);
+  if(!linha || linha.preco===null || linha.preco===undefined) return null;
+  const corte = evEbitDeCorte(snapshot);
+  const alvo = precoAlvoFormulaico(linha.evEbit, linha.preco, corte);
+  if(alvo===null) return null;
+  return {
+    dataSnapshot: snapshot.data,
+    evEbitPapel: linha.evEbit,
+    evEbitCorte: corte,
+    precoNoSnapshot: linha.preco,
+    dentroTopN: linha.posicao <= estado.config.topN,
+    precoAlvo: alvo
+  };
+}
+
+function renderContexto(){
+  const tbody = document.querySelector('#tabelaContexto tbody');
+  tbody.innerHTML = '';
+  const abertas = estado.posicoes.filter(p=>p.status!=='encerrada');
+  const msgVazio = document.getElementById('msgSemContexto');
+
+  if(abertas.length===0){
+    msgVazio.textContent = 'Nenhuma posição aberta.';
+    msgVazio.classList.remove('oculto');
+  } else if(!ultimoSnapshotRanking()){
+    msgVazio.textContent = 'Nenhum ranking importado ainda. Importe um CSV na aba Ranking para calcular preço-teto e faixa de entrada.';
+    msgVazio.classList.remove('oculto');
+  } else {
+    msgVazio.classList.add('oculto');
+  }
+
+  for(const p of abertas){
+    const c = calcularPosicao(p);
+    const ctx = contextoParaTicker(p.ticker);
+    const tr = document.createElement('tr');
+    if(!ctx){
+      tr.innerHTML = `<td>${p.ticker}</td><td class="num">${c.precoAtual!==null?fmtMoeda(c.precoAtual):'—'}</td>
+        <td colspan="5" class="nota">sem dado deste ticker no último ranking importado</td>`;
+      tbody.appendChild(tr);
+      continue;
+    }
+    const distancia = c.precoAtual!==null ? (c.precoAtual/ctx.precoAlvo - 1) : null;
+    const rotulo = ctx.dentroTopN ? 'teto (venda)' : 'entrada (compra)';
+    tr.innerHTML = `
+      <td>${p.ticker}</td>
+      <td class="num">${c.precoAtual!==null?fmtMoeda(c.precoAtual):'—'}</td>
+      <td class="num">${ctx.evEbitPapel.toFixed(2)}</td>
+      <td class="num">${ctx.evEbitCorte.toFixed(2)}</td>
+      <td class="num">${fmtMoeda(ctx.precoAlvo)} <span class="nota">(${rotulo})</span></td>
+      <td class="num${ctx.dentroTopN?' '+classeSinal(-distancia):''}">${distancia!==null?fmtPct(distancia,1):'—'}</td>
+      <td>${fmtData(ctx.dataSnapshot)}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  // conformidade
+  const contConf = document.getElementById('listaConformidade');
+  if(abertas.length===0){ contConf.innerHTML=''; return; }
+  contConf.innerHTML = abertas.map(p=>`
+    <div class="campo" style="margin-bottom:10px">
+      <label>${p.ticker}</label>
+      <textarea data-conformidade="${p.id}" style="min-height:50px">${p.notaConformidade||''}</textarea>
+    </div>`).join('') + `<button class="acao secundario" id="btnSalvarConformidade">Salvar notas</button>`;
+
+  document.getElementById('btnSalvarConformidade').addEventListener('click', ()=>{
+    contConf.querySelectorAll('[data-conformidade]').forEach(ta=>{
+      const pos = estado.posicoes.find(x=>x.id===ta.dataset.conformidade);
+      if(pos) pos.notaConformidade = ta.value;
+    });
+    salvarEstado();
+    alert('Notas de conformidade salvas.');
+  });
+}
+
+
+
+popularListasFiltro();
+render();
+</script>
+<script>
+  // Registro do service worker — só ativa quando servido por http(s)
+  // (GitHub Pages). Em file:// local o app funciona normalmente sem PWA.
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js')
+        .catch(err => console.warn('Service worker não registrado:', err));
+    });
+  }
+</script>
+</body>
+</html>

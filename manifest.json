@@ -1,0 +1,18 @@
+{
+  "name": "Carteira — Fórmula Mágica",
+  "short_name": "Carteira FM",
+  "description": "Controle de carteira, ranking e calendário de rotação pela Fórmula Mágica de Greenblatt",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#e8e6e1",
+  "theme_color": "#12161a",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
