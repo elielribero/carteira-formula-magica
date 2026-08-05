@@ -296,6 +296,7 @@
       <button data-sub="aporte">Aporte / retirada</button>
       <button data-sub="nota">Nota de corretagem</button>
       <button data-sub="precos">Preços</button>
+      <button data-sub="historico">Histórico</button>
     </div>
 
     <!-- COMPRA -->
@@ -420,6 +421,29 @@
       <div id="listaMapaTitulos" class="card"></div>
     </div>
 
+    <!-- HISTÓRICO -->
+    <div class="sub-tela oculto" id="sub-historico">
+      <h2 style="margin-top:0">Todos os lançamentos</h2>
+      <p class="nota">
+        Editar carrega o lançamento no formulário correspondente. Excluir remove
+        definitivamente — o saldo do caixa e o preço médio são recalculados do zero,
+        então não fica resíduo. Use o backup antes de exclusões em série.
+      </p>
+      <div class="sub-tabs" id="filtroHistorico">
+        <button data-filtro="todos" class="ativo">Todos</button>
+        <button data-filtro="lote">Compras e vendas</button>
+        <button data-filtro="provento">Proventos</button>
+        <button data-filtro="fluxo">Aportes e retiradas</button>
+        <button data-filtro="evento">Eventos societários</button>
+      </div>
+      <div class="tabela-scroll">
+        <table id="tabelaHistorico"><thead><tr>
+          <th>Data</th><th>Tipo</th><th>Ticker</th><th>Detalhe</th><th>Valor</th><th></th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+      <div class="msg-vazio oculto" id="msgSemHistorico">Nenhum lançamento registrado.</div>
+    </div>
+
     <!-- PREÇOS -->
     <div class="sub-tela oculto" id="sub-precos">
       <h2 style="margin-top:0">Importar CSV de cotações</h2>
@@ -445,7 +469,29 @@
     <h2>Parâmetros</h2>
     <div id="listaConfig"></div>
 
-    <h2>Backup</h2>
+    <h2>Sincronização com Google Sheets (Apps Script)</h2>
+    <p class="nota">
+      Com isto configurado, as cotações são buscadas direto da sua planilha (sem baixar CSV)
+      e o backup vai automaticamente para uma pasta do seu Drive. As instruções de instalação
+      estão no arquivo <b>AppsScript-Code.gs</b>. Enquanto estiver em branco, o app funciona
+      normalmente pelo modo manual.
+    </p>
+    <div class="campo"><label>URL do Web App (termina em /exec)</label>
+      <input type="text" id="cfgAppsScriptUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+    <div class="campo" style="margin-top:8px;max-width:320px"><label>Token (a senha definida no script)</label>
+      <input type="text" id="cfgAppsScriptToken"></div>
+    <div class="config-linha" style="margin-top:8px">
+      <label>Backup automático ao lançar</label>
+      <input type="checkbox" id="cfgBackupAutomatico" style="width:auto">
+    </div>
+    <div class="rodape-acoes">
+      <button class="acao secundario" id="btnSalvarAppsScript">Salvar configuração</button>
+      <button class="acao" id="btnSincronizarCotacoes">Atualizar cotações agora</button>
+      <button class="acao secundario" id="btnBackupNuvem">Enviar backup ao Drive</button>
+    </div>
+    <div id="statusSincronizacao" style="margin-top:10px"></div>
+
+    <h2>Backup local</h2>
     <p class="nota" id="statusBackup"></p>
     <div class="rodape-acoes">
       <button class="acao secundario" id="btnExportar">Exportar backup (.json)</button>
@@ -504,6 +550,9 @@ function estadoPadrao(){
       tetoSetorPercentual: 25,
       falhasParaSuspeitaDeslistagem: 3,
       pisoLiquidezDiaria: 200000,
+      appsScriptUrl: '',
+      appsScriptToken: '',
+      backupAutomatico: true,
       dataVerificacaoParametrosFiscais: ''
     },
     // Listas editáveis do filtro do Módulo 2 (memorial, seção 5.1).
@@ -561,6 +610,7 @@ function salvarEstado(comSnapshot){
   }
   try{
     localStorage.setItem(CHAVE_STORAGE, JSON.stringify(estado));
+    if(typeof talvezBackupAutomatico === 'function') talvezBackupAutomatico();
   }catch(e){
     alert('Não foi possível salvar localmente (armazenamento cheio ou bloqueado). Exporte um backup imediatamente.');
     console.error(e);
@@ -780,7 +830,40 @@ function fluxoParaAcoesNaData(dataRef){
       : -(l.quantidade*l.precoUnitario - l.custos)), 0);
 }
 
+/* Caixa DERIVADO (v2): o saldo é recalculado do zero a partir dos
+   lançamentos, em vez de acumulado incrementalmente. Isso é o que torna
+   editar e excluir lançamentos seguro — com saldo incremental, remover um
+   lançamento antigo deixaria o efeito dele embutido no total para sempre.
+   Fonte da verdade: lotes + fluxosExternos + proventos. */
+function recalcularCaixa(){
+  let saldo = 0;
+  const movimentos = [];
+
+  for(const f of estado.fluxosExternos){
+    const v = f.tipo==='aporte' ? f.valor : -f.valor;
+    saldo += v;
+    movimentos.push({ data:f.data, valor:v, origem:f.tipo, refId:f.id });
+  }
+  for(const l of estado.lotes){
+    const bruto = l.quantidade * l.precoUnitario;
+    const v = l.tipo==='compra' ? -(bruto + l.custos) : (bruto - l.custos);
+    saldo += v;
+    movimentos.push({ data:l.data, valor:v, origem:l.tipo, refId:l.id });
+  }
+  for(const pv of estado.proventos){
+    const v = (pv.valorBruto||0) - (pv.irRetido||0);
+    saldo += v;
+    movimentos.push({ data:pv.dataPagamento, valor:v, origem:'provento', refId:pv.id });
+  }
+
+  movimentos.sort((a,b)=> a.data<b.data?-1:1);
+  estado.caixa.saldo = Math.round(saldo*100)/100;
+  estado.caixa.movimentos = movimentos;
+  return estado.caixa.saldo;
+}
+
 function registrarSnapshotValor(){
+  recalcularCaixa();
   const d = hoje();
   const infoIbov = estado.precos['IBOV'] || estado.precos['INDEXBVMF:IBOV'] || null;
   const ponto = {
@@ -1067,6 +1150,7 @@ function render(){
   renderConfig();
   renderCalendario();
   renderContexto();
+  renderHistorico();
   renderMapaTitulos();
   renderStatusBackup();
 }
@@ -1424,13 +1508,24 @@ document.getElementById('formCompra').addEventListener('submit', (e)=>{
     pos.notaConformidade = document.getElementById('cConformidade').value;
   }
 
-  estado.lotes.push({
-    id: uuid(), posicaoId: pos.id, tipo:'compra', data,
-    quantidade: parseFloat(document.getElementById('cQtd').value),
-    precoUnitario: parseFloat(document.getElementById('cPreco').value),
-    custos: parseFloat(document.getElementById('cCustos').value)||0,
-    observacao:''
-  });
+  if(edicaoEmCurso && edicaoEmCurso.tipo==='lote'){
+    const lote = estado.lotes.find(l=>l.id===edicaoEmCurso.id);
+    if(lote){
+      lote.posicaoId = pos.id;
+      lote.data = data;
+      lote.quantidade = parseFloat(document.getElementById('cQtd').value);
+      lote.precoUnitario = parseFloat(document.getElementById('cPreco').value);
+      lote.custos = parseFloat(document.getElementById('cCustos').value)||0;
+    }
+  } else {
+    estado.lotes.push({
+      id: uuid(), posicaoId: pos.id, tipo:'compra', data,
+      quantidade: parseFloat(document.getElementById('cQtd').value),
+      precoUnitario: parseFloat(document.getElementById('cPreco').value),
+      custos: parseFloat(document.getElementById('cCustos').value)||0,
+      observacao:''
+    });
+  }
 
   // Contabilidade do caixa (fronteira da TIR = ações + caixa, spec 4.3):
   // o valor gasto na compra sai do caixa. Se não houver saldo suficiente,
@@ -1441,7 +1536,7 @@ document.getElementById('formCompra').addEventListener('submit', (e)=>{
     + (parseFloat(document.getElementById('cCustos').value)||0);
 
   const saldoAntes = estado.caixa.saldo || 0;
-  if(gastoCompra > saldoAntes){
+  if(!edicaoEmCurso && gastoCompra > saldoAntes){
     const falta = gastoCompra - saldoAntes;
     const registrar = confirm(
       `Esta compra custa ${fmtMoeda(gastoCompra)} e o caixa tem ${fmtMoeda(saldoAntes)}.\n\n` +
@@ -1451,24 +1546,21 @@ document.getElementById('formCompra').addEventListener('submit', (e)=>{
     );
     if(registrar){
       estado.fluxosExternos.push({ id: uuid(), data, tipo:'aporte', valor: falta });
-      estado.caixa.saldo += falta;
-      estado.caixa.movimentos.push({ data, valor: falta, origem:'aporte' });
     }
   }
 
-  estado.caixa.saldo -= gastoCompra;
-  estado.caixa.movimentos.push({ data, valor: -gastoCompra, origem:'compra' });
-  registrarSnapshotValor();
-
-  // status: se essa era a 1a compra, ela nasce incompleta; usuário marca
-  // "completa" manualmente quando considerar atingido o tamanho desejado
-  // (Módulo 1 não impõe um valor-alvo numérico — isso é decisão sua a cada mês).
+  const eraEdicao = !!edicaoEmCurso;
+  limparEdicao();
+  registrarSnapshotValor();   // recalcula o caixa a partir dos lançamentos
 
   salvarEstado();
   e.target.reset();
+  document.getElementById('cData').value = hoje();
   document.getElementById('sugestaoAlocacao').classList.add('oculto');
   mudarTela('posicoes');
-  alert(`Compra lançada. Posição ${ticker} está como "incompleta" — marque como completa na tela Posições quando considerar o tamanho adequado.`);
+  if(!eraEdicao){
+    alert(`Compra lançada. Posição ${ticker} está como "incompleta" — marque como completa na tela Posições quando considerar o tamanho adequado.`);
+  }
 });
 
 document.getElementById('vPosicao').addEventListener('change', atualizarPreviaGanho);
@@ -1497,25 +1589,32 @@ document.getElementById('formVenda').addEventListener('submit', (e)=>{
   const qtd = parseFloat(document.getElementById('vQtd').value);
   if(qtd > c.qtd){ alert(`Quantidade maior que a posição atual (${c.qtd}).`); return; }
 
-  estado.lotes.push({
-    id: uuid(), posicaoId: pos.id, tipo:'venda', data: document.getElementById('vData').value,
-    quantidade: qtd, precoUnitario: parseFloat(document.getElementById('vPreco').value),
-    custos: parseFloat(document.getElementById('vCustos').value)||0, observacao:''
-  });
+  if(edicaoEmCurso && edicaoEmCurso.tipo==='lote'){
+    const lote = estado.lotes.find(l=>l.id===edicaoEmCurso.id);
+    if(lote){
+      lote.posicaoId = pos.id;
+      lote.data = document.getElementById('vData').value;
+      lote.quantidade = qtd;
+      lote.precoUnitario = parseFloat(document.getElementById('vPreco').value);
+      lote.custos = parseFloat(document.getElementById('vCustos').value)||0;
+    }
+  } else {
+    estado.lotes.push({
+      id: uuid(), posicaoId: pos.id, tipo:'venda', data: document.getElementById('vData').value,
+      quantidade: qtd, precoUnitario: parseFloat(document.getElementById('vPreco').value),
+      custos: parseFloat(document.getElementById('vCustos').value)||0, observacao:''
+    });
+  }
 
   // Contabilidade do caixa: o produto líquido da venda entra no caixa
   // (fronteira da TIR = ações + caixa, spec 4.3).
-  const dataVenda = document.getElementById('vData').value;
-  const produtoVenda = qtd * parseFloat(document.getElementById('vPreco').value)
-    - (parseFloat(document.getElementById('vCustos').value)||0);
-  estado.caixa.saldo += produtoVenda;
-  estado.caixa.movimentos.push({ data: dataVenda, valor: produtoVenda, origem:'venda' });
-
   if(qtd === c.qtd){ pos.status = 'encerrada'; }
 
+  limparEdicao();
   registrarSnapshotValor();
   salvarEstado();
   e.target.reset();
+  document.getElementById('vData').value = hoje();
   document.getElementById('previaGanho').textContent='';
   mudarTela('posicoes');
 });
@@ -1542,15 +1641,19 @@ document.getElementById('formEvento').addEventListener('submit', (e)=>{
 
 document.getElementById('formProvento').addEventListener('submit', (e)=>{
   e.preventDefault();
-  estado.proventos.push({
-    id: uuid(), ticker: document.getElementById('pvTicker').value.toUpperCase().trim(),
+  const dadosProvento = {
+    ticker: document.getElementById('pvTicker').value.toUpperCase().trim(),
     dataPagamento: document.getElementById('pvData').value, tipo: document.getElementById('pvTipo').value,
     valorBruto: parseFloat(document.getElementById('pvValor').value),
     irRetido: parseFloat(document.getElementById('pvIR').value)||0
-  });
-  const valorLiquido = parseFloat(document.getElementById('pvValor').value) - (parseFloat(document.getElementById('pvIR').value)||0);
-  estado.caixa.saldo += valorLiquido;
-  estado.caixa.movimentos.push({ data: document.getElementById('pvData').value, valor: valorLiquido, origem:'provento' });
+  };
+  if(edicaoEmCurso && edicaoEmCurso.tipo==='provento'){
+    const pv = estado.proventos.find(x=>x.id===edicaoEmCurso.id);
+    if(pv) Object.assign(pv, dadosProvento);
+  } else {
+    estado.proventos.push({ id: uuid(), ...dadosProvento });
+  }
+  limparEdicao();
   registrarSnapshotValor();
   salvarEstado();
   e.target.reset();
@@ -1562,9 +1665,13 @@ document.getElementById('formAporte').addEventListener('submit', (e)=>{
   const tipo = document.getElementById('apTipo').value;
   const valor = parseFloat(document.getElementById('apValor').value);
   const data = document.getElementById('apData').value;
-  estado.fluxosExternos.push({ id: uuid(), data, tipo, valor });
-  estado.caixa.saldo += (tipo==='aporte'? valor : -valor);
-  estado.caixa.movimentos.push({ data, valor: tipo==='aporte'?valor:-valor, origem: tipo });
+  if(edicaoEmCurso && edicaoEmCurso.tipo==='fluxo'){
+    const f = estado.fluxosExternos.find(x=>x.id===edicaoEmCurso.id);
+    if(f) Object.assign(f, { data, tipo, valor });
+  } else {
+    estado.fluxosExternos.push({ id: uuid(), data, tipo, valor });
+  }
+  limparEdicao();
   registrarSnapshotValor();
   salvarEstado();
   e.target.reset();
@@ -1981,8 +2088,6 @@ document.getElementById('btnConfirmarNota').addEventListener('click', ()=>{
       }
       estado.lotes.push({ id:uuid(), posicaoId:pos.id, tipo:'compra', data,
         quantidade:n.quantidade, precoUnitario:n.preco, custos:n.custoRateado, observacao:'nota de corretagem' });
-      estado.caixa.saldo -= (n.valor + n.custoRateado);
-      estado.caixa.movimentos.push({ data, valor:-(n.valor+n.custoRateado), origem:'compra' });
       lancadas++;
     } else {
       const pos = estado.posicoes.find(p=>p.ticker===n.ticker && p.status!=='encerrada');
@@ -1991,8 +2096,6 @@ document.getElementById('btnConfirmarNota').addEventListener('click', ()=>{
       if(n.quantidade > c.qtd){ ignoradas.push(n.ticker+' (venda de '+n.quantidade+' > posição de '+c.qtd+')'); continue; }
       estado.lotes.push({ id:uuid(), posicaoId:pos.id, tipo:'venda', data,
         quantidade:n.quantidade, precoUnitario:n.preco, custos:n.custoRateado, observacao:'nota de corretagem' });
-      estado.caixa.saldo += (n.valor - n.custoRateado);
-      estado.caixa.movimentos.push({ data, valor:(n.valor-n.custoRateado), origem:'venda' });
       if(n.quantidade === c.qtd) pos.status = 'encerrada';
       lancadas++;
     }
@@ -2165,6 +2268,208 @@ document.getElementById('btnSimularFatiamento').addEventListener('click', ()=>{
 });
 
 /* ==========================================================================
+   HISTÓRICO — EDIÇÃO E EXCLUSÃO DE LANÇAMENTOS
+   Seguro porque o caixa é derivado (recalcularCaixa) e o preço médio é
+   calculado a partir dos lotes a cada leitura. Excluir ou alterar um
+   lançamento não deixa resíduo em nenhum acumulador.
+   ========================================================================== */
+
+let edicaoEmCurso = null;   // { tipo:'lote'|'provento'|'fluxo', id }
+let filtroHistorico = 'todos';
+
+function limparEdicao(){
+  edicaoEmCurso = null;
+  document.querySelectorAll('.aviso-edicao').forEach(el=>el.remove());
+}
+
+function marcarFormEmEdicao(formId, texto){
+  const form = document.getElementById(formId);
+  if(form.querySelector('.aviso-edicao')) form.querySelector('.aviso-edicao').remove();
+  const aviso = document.createElement('div');
+  aviso.className = 'alerta aviso-edicao';
+  aviso.style.gridColumn = '1/-1';
+  aviso.innerHTML = `${texto} <button type="button" class="acao pequeno secundario" id="btnCancelarEdicao" style="margin-left:8px">Cancelar edição</button>`;
+  form.prepend(aviso);
+  document.getElementById('btnCancelarEdicao').addEventListener('click', ()=>{
+    limparEdicao(); form.reset();
+    ['cData','vData','pvData','apData'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=hoje(); });
+  });
+}
+
+function excluirLancamento(tipo, id){
+  const confirmar = confirm('Excluir este lançamento definitivamente? O caixa e o preço médio serão recalculados.');
+  if(!confirmar) return;
+
+  if(tipo==='lote'){
+    const lote = estado.lotes.find(l=>l.id===id);
+    estado.lotes = estado.lotes.filter(l=>l.id!==id);
+    // se a posição ficou sem nenhum lote, remove a posição também
+    if(lote){
+      const restantes = estado.lotes.filter(l=>l.posicaoId===lote.posicaoId);
+      if(restantes.length===0){
+        estado.posicoes = estado.posicoes.filter(p=>p.id!==lote.posicaoId);
+      } else {
+        // reabre a posição se a venda que a encerrava foi removida
+        const pos = estado.posicoes.find(p=>p.id===lote.posicaoId);
+        if(pos && pos.status==='encerrada'){
+          const c = calcularPosicao(pos);
+          if(c.qtd>0) pos.status = 'incompleta';
+        }
+        // reajusta a data de abertura para a da primeira compra remanescente
+        const pos2 = estado.posicoes.find(p=>p.id===lote.posicaoId);
+        if(pos2){
+          const compras = estado.lotes.filter(l=>l.posicaoId===pos2.id && l.tipo==='compra')
+            .sort((a,b)=> a.data<b.data?-1:1);
+          if(compras.length>0 && compras[0].data !== pos2.dataAbertura){
+            pos2.dataAbertura = compras[0].data;
+            pos2.dataFimJanelaComplementacao = addMeses(compras[0].data, estado.config.janelaComplementacaoMeses);
+          }
+        }
+      }
+    }
+  } else if(tipo==='provento'){
+    estado.proventos = estado.proventos.filter(p=>p.id!==id);
+  } else if(tipo==='fluxo'){
+    estado.fluxosExternos = estado.fluxosExternos.filter(f=>f.id!==id);
+  } else if(tipo==='evento'){
+    estado.eventos = estado.eventos.filter(e=>e.id!==id);
+  }
+
+  registrarSnapshotValor();
+  salvarEstado();
+  render();
+}
+
+function editarLancamento(tipo, id){
+  limparEdicao();
+  mudarTela('lancamentos');
+
+  if(tipo==='lote'){
+    const lote = estado.lotes.find(l=>l.id===id);
+    if(!lote) return;
+    const pos = estado.posicoes.find(p=>p.id===lote.posicaoId);
+    edicaoEmCurso = { tipo:'lote', id };
+
+    if(lote.tipo==='compra'){
+      mudarSubTela('compra');
+      document.getElementById('cTicker').value = pos ? pos.ticker : '';
+      document.getElementById('cEmpresa').value = pos ? (pos.empresa||'') : '';
+      document.getElementById('cSetor').value = pos ? (pos.setor||'') : '';
+      document.getElementById('cData').value = lote.data;
+      document.getElementById('cQtd').value = lote.quantidade;
+      document.getElementById('cPreco').value = lote.precoUnitario;
+      document.getElementById('cCustos').value = lote.custos;
+      marcarFormEmEdicao('formCompra', `Editando compra de <b>${pos?pos.ticker:'—'}</b> de ${fmtData(lote.data)}.`);
+    } else {
+      mudarSubTela('venda');
+      document.getElementById('vPosicao').value = lote.posicaoId;
+      document.getElementById('vData').value = lote.data;
+      document.getElementById('vQtd').value = lote.quantidade;
+      document.getElementById('vPreco').value = lote.precoUnitario;
+      document.getElementById('vCustos').value = lote.custos;
+      marcarFormEmEdicao('formVenda', `Editando venda de <b>${pos?pos.ticker:'—'}</b> de ${fmtData(lote.data)}.`);
+    }
+  } else if(tipo==='provento'){
+    const pv = estado.proventos.find(p=>p.id===id);
+    if(!pv) return;
+    edicaoEmCurso = { tipo:'provento', id };
+    mudarSubTela('provento');
+    document.getElementById('pvTicker').value = pv.ticker;
+    document.getElementById('pvData').value = pv.dataPagamento;
+    document.getElementById('pvTipo').value = pv.tipo;
+    document.getElementById('pvValor').value = pv.valorBruto;
+    document.getElementById('pvIR').value = pv.irRetido;
+    marcarFormEmEdicao('formProvento', `Editando provento de <b>${pv.ticker}</b> de ${fmtData(pv.dataPagamento)}.`);
+  } else if(tipo==='fluxo'){
+    const f = estado.fluxosExternos.find(x=>x.id===id);
+    if(!f) return;
+    edicaoEmCurso = { tipo:'fluxo', id };
+    mudarSubTela('aporte');
+    document.getElementById('apData').value = f.data;
+    document.getElementById('apTipo').value = f.tipo;
+    document.getElementById('apValor').value = f.valor;
+    marcarFormEmEdicao('formAporte', `Editando ${f.tipo} de ${fmtData(f.data)}.`);
+  }
+}
+
+function renderHistorico(){
+  const linhas = [];
+
+  for(const l of estado.lotes){
+    const pos = estado.posicoes.find(p=>p.id===l.posicaoId);
+    const bruto = l.quantidade*l.precoUnitario;
+    linhas.push({
+      categoria:'lote', id:l.id, data:l.data,
+      tipo: l.tipo==='compra'?'Compra':'Venda',
+      ticker: pos?pos.ticker:'—',
+      detalhe: `${l.quantidade} un. a ${fmtMoeda(l.precoUnitario)}${l.custos?` + ${fmtMoeda(l.custos)} de custos`:''}`,
+      valor: l.tipo==='compra' ? -(bruto+l.custos) : (bruto-l.custos),
+      editavel:true
+    });
+  }
+  for(const pv of estado.proventos){
+    linhas.push({
+      categoria:'provento', id:pv.id, data:pv.dataPagamento,
+      tipo: pv.tipo==='jcp'?'JCP':'Dividendo', ticker:pv.ticker,
+      detalhe: `bruto ${fmtMoeda(pv.valorBruto)}${pv.irRetido?`, IR ${fmtMoeda(pv.irRetido)}`:''}`,
+      valor: (pv.valorBruto||0)-(pv.irRetido||0), editavel:true
+    });
+  }
+  for(const f of estado.fluxosExternos){
+    linhas.push({
+      categoria:'fluxo', id:f.id, data:f.data,
+      tipo: f.tipo==='aporte'?'Aporte':'Retirada', ticker:'—',
+      detalhe:'—', valor: f.tipo==='aporte'?f.valor:-f.valor, editavel:true
+    });
+  }
+  for(const e of estado.eventos){
+    linhas.push({
+      categoria:'evento', id:e.id, data:e.data,
+      tipo: e.tipo.charAt(0).toUpperCase()+e.tipo.slice(1), ticker:e.ticker,
+      detalhe: e.tipo==='bonificacao' ? `${e.quantidadeConcedida||0} un.` : `fator ${e.fator}`,
+      valor: null, editavel:false
+    });
+  }
+
+  linhas.sort((a,b)=> a.data<b.data?1:(a.data>b.data?-1:0));
+  const visiveis = filtroHistorico==='todos' ? linhas : linhas.filter(l=>l.categoria===filtroHistorico);
+
+  document.getElementById('msgSemHistorico').classList.toggle('oculto', visiveis.length>0);
+  const tbody = document.querySelector('#tabelaHistorico tbody');
+  tbody.innerHTML = '';
+  for(const l of visiveis){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fmtData(l.data)}</td>
+      <td>${l.tipo}</td>
+      <td>${l.ticker}</td>
+      <td>${l.detalhe}</td>
+      <td class="num ${l.valor!==null?classeSinal(l.valor):''}">${l.valor!==null?fmtMoeda(l.valor):'—'}</td>
+      <td>
+        ${l.editavel?`<button class="acao pequeno secundario" data-editar="${l.categoria}:${l.id}">Editar</button> `:''}
+        <button class="acao pequeno perigo" data-excluir="${l.categoria}:${l.id}">Excluir</button>
+      </td>`;
+    tbody.appendChild(tr);
+  }
+
+  tbody.querySelectorAll('[data-editar]').forEach(b=>{
+    b.addEventListener('click', ()=>{ const [t,i]=b.dataset.editar.split(':'); editarLancamento(t,i); });
+  });
+  tbody.querySelectorAll('[data-excluir]').forEach(b=>{
+    b.addEventListener('click', ()=>{ const [t,i]=b.dataset.excluir.split(':'); excluirLancamento(t,i); });
+  });
+}
+
+document.querySelectorAll('#filtroHistorico button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    filtroHistorico = b.dataset.filtro;
+    document.querySelectorAll('#filtroHistorico button').forEach(x=>x.classList.toggle('ativo', x===b));
+    renderHistorico();
+  });
+});
+
+
+/* ==========================================================================
    MÓDULO 4 — PREÇO-TETO FORMULAICO E FAIXA DE ENTRADA
    Estimativa derivada do método (não análise gráfica): a que preço o
    EV/EBIT do papel igualaria o EV/EBIT de corte (última posição dentro do
@@ -2278,12 +2583,144 @@ function renderContexto(){
 
 
 
+/* ==========================================================================
+   SINCRONIZAÇÃO COM APPS SCRIPT
+   Resolve o que o CSV publicado não resolveu: o Web App do Apps Script
+   devolve JSON com origem liberada, então o navegador consegue ler.
+   O POST usa Content-Type text/plain de propósito — evita a requisição de
+   verificação prévia (preflight), que o Apps Script não trata bem.
+   ========================================================================== */
+
+function configSincronizacaoOk(){
+  return !!(estado.config.appsScriptUrl && estado.config.appsScriptToken);
+}
+
+function statusSinc(html, critico){
+  const el = document.getElementById('statusSincronizacao');
+  if(el) el.innerHTML = `<div class="alerta${critico?' critico':''}">${html}</div>`;
+}
+
+async function sincronizarCotacoes(silencioso){
+  if(!configSincronizacaoOk()){
+    if(!silencioso) statusSinc('Preencha a URL e o token antes de sincronizar.', true);
+    return false;
+  }
+  if(!silencioso) statusSinc('Buscando cotações…');
+
+  try{
+    const url = estado.config.appsScriptUrl + '?token=' + encodeURIComponent(estado.config.appsScriptToken);
+    const resp = await fetch(url, { method:'GET', redirect:'follow' });
+    const dados = await resp.json();
+
+    if(!dados.ok){ statusSinc('O Apps Script recusou: '+(dados.erro||'erro não informado'), true); return false; }
+
+    let atualizados=0, semPreco=0, novosSuspeitos=[];
+    for(const c of dados.cotacoes){
+      const ticker = c.ticker;
+      if(!estado.precos[ticker]) estado.precos[ticker] =
+        { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+      const info = estado.precos[ticker];
+
+      if(c.preco !== null && c.preco !== undefined){
+        info.ultimoValido = c.preco;
+        info.dataUltimoValido = hoje();
+        info.falhasConsecutivas = 0;
+        info.suspeitaDeslistagem = false;
+        atualizados++;
+      } else {
+        // mesma regra do CSV: preço bom nunca é sobrescrito por ausência
+        info.falhasConsecutivas = (info.falhasConsecutivas||0)+1;
+        semPreco++;
+        if(info.falhasConsecutivas >= estado.config.falhasParaSuspeitaDeslistagem && !info.suspeitaDeslistagem){
+          info.suspeitaDeslistagem = true;
+          novosSuspeitos.push(ticker);
+        }
+      }
+      if(c.max52!==null && c.max52!==undefined) info.maxima52 = c.max52;
+      if(c.min52!==null && c.min52!==undefined) info.minima52 = c.min52;
+    }
+
+    registrarSnapshotValor();
+    salvarEstado();
+    render();
+
+    let msg = `${atualizados} de ${dados.total} cotações atualizadas.`;
+    if(semPreco>0) msg += ` ${semPreco} sem preço nesta consulta.`;
+    if(novosSuspeitos.length>0) msg += ` <b>Suspeita de deslistagem: ${novosSuspeitos.join(', ')}</b> — compra bloqueada até verificação.`;
+    statusSinc(msg);
+    return true;
+
+  }catch(err){
+    statusSinc('Falha ao contatar o Apps Script: '+err.message+
+      '. Confira se a implantação está como "Qualquer pessoa" e se a URL termina em /exec.', true);
+    return false;
+  }
+}
+
+async function enviarBackupNuvem(silencioso){
+  if(!configSincronizacaoOk()){
+    if(!silencioso) statusSinc('Preencha a URL e o token antes de enviar o backup.', true);
+    return false;
+  }
+  if(!silencioso) statusSinc('Enviando backup…');
+
+  try{
+    const resp = await fetch(estado.config.appsScriptUrl, {
+      method:'POST',
+      // text/plain evita o preflight, que o Apps Script não trata bem
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      redirect:'follow',
+      body: JSON.stringify({ token: estado.config.appsScriptToken, dados: estado })
+    });
+    const r = await resp.json();
+    if(!r.ok){ if(!silencioso) statusSinc('O Apps Script recusou o backup: '+(r.erro||''), true); return false; }
+
+    localStorage.setItem(CHAVE_BACKUP_DATA, hoje());
+    renderStatusBackup();
+    if(!silencioso) statusSinc(`Backup gravado no Drive: <b>${r.arquivo}</b>`);
+    return true;
+
+  }catch(err){
+    if(!silencioso) statusSinc('Falha ao enviar backup: '+err.message, true);
+    return false;
+  }
+}
+
+// Backup automático, no máximo uma vez por dia, para não fazer requisição a
+// cada clique. Silencioso: nunca interrompe o que você está fazendo.
+function talvezBackupAutomatico(){
+  if(!estado.config.backupAutomatico || !configSincronizacaoOk()) return;
+  const ultimo = localStorage.getItem(CHAVE_BACKUP_DATA);
+  if(ultimo === hoje()) return;
+  enviarBackupNuvem(true);
+}
+
+document.getElementById('btnSalvarAppsScript').addEventListener('click', ()=>{
+  estado.config.appsScriptUrl = document.getElementById('cfgAppsScriptUrl').value.trim();
+  estado.config.appsScriptToken = document.getElementById('cfgAppsScriptToken').value.trim();
+  estado.config.backupAutomatico = document.getElementById('cfgBackupAutomatico').checked;
+  salvarEstado();
+  statusSinc('Configuração salva.');
+});
+
+document.getElementById('btnSincronizarCotacoes').addEventListener('click', ()=> sincronizarCotacoes(false));
+document.getElementById('btnBackupNuvem').addEventListener('click', ()=> enviarBackupNuvem(false));
+
+function popularConfigSincronizacao(){
+  document.getElementById('cfgAppsScriptUrl').value = estado.config.appsScriptUrl || '';
+  document.getElementById('cfgAppsScriptToken').value = estado.config.appsScriptToken || '';
+  document.getElementById('cfgBackupAutomatico').checked = estado.config.backupAutomatico !== false;
+}
+
+/* ==========================================================================
+   INICIALIZAÇÃO
+   ========================================================================== */
+
 popularListasFiltro();
+popularConfigSincronizacao();
 render();
 </script>
 <script>
-  // Registro do service worker — só ativa quando servido por http(s)
-  // (GitHub Pages). Em file:// local o app funciona normalmente sem PWA.
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('service-worker.js')
