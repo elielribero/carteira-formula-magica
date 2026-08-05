@@ -113,10 +113,32 @@
 </head>
 <body>
 
+<div id="telaConexao" class="oculto" style="position:fixed;inset:0;background:var(--papel);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px">
+  <div style="max-width:520px;width:100%">
+    <h1 style="font-size:16px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px">Carteira — Fórmula Mágica</h1>
+    <p class="nota" style="margin-bottom:18px">
+      Cole o endereço de conexão da sua planilha (a URL do Apps Script, terminada em <b>/exec</b>).
+      Ele é pedido uma vez por aparelho e fica guardado só neste navegador — não está no código
+      da página, que é público. Sem ele o app não tem como achar seus dados.
+    </p>
+    <div class="campo"><label>Endereço de conexão</label>
+      <input type="text" id="inputUrlConexao" placeholder="https://script.google.com/macros/s/.../exec"></div>
+    <div id="erroConexao" style="margin-top:8px"></div>
+    <button class="acao" id="btnConectar" style="margin-top:14px">Conectar</button>
+  </div>
+</div>
+
 <header>
   <h1>Carteira — Fórmula Mágica</h1>
-  <span class="data-hoje" id="dataHoje"></span>
+  <span style="display:flex;align-items:center;gap:14px">
+    <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--sub)">
+      <span id="pontoSinc" style="width:8px;height:8px;border-radius:50%;background:var(--sub);display:inline-block"></span>
+      <span id="textoSinc">—</span>
+    </span>
+    <span class="data-hoje" id="dataHoje"></span>
+  </span>
 </header>
+<div id="bannerSinc" style="display:none;padding:9px 20px;font-size:13px;background:var(--atencao-bg);border-bottom:1px solid var(--linha)"></div>
 
 <nav id="navPrincipal">
   <button data-tela="painel" class="ativo">Painel</button>
@@ -469,25 +491,18 @@
     <h2>Parâmetros</h2>
     <div id="listaConfig"></div>
 
-    <h2>Sincronização com Google Sheets (Apps Script)</h2>
+    <h2>Conexão com a planilha</h2>
     <p class="nota">
-      Com isto configurado, as cotações são buscadas direto da sua planilha (sem baixar CSV)
-      e o backup vai automaticamente para uma pasta do seu Drive. As instruções de instalação
-      estão no arquivo <b>AppsScript-Code.gs</b>. Enquanto estiver em branco, o app funciona
-      normalmente pelo modo manual.
+      Seus dados vivem na planilha, não neste aparelho — por isso aparecem iguais em qualquer
+      lugar onde você abrir o app e informar o endereço de conexão. O endereço é pedido uma vez
+      por aparelho e fica guardado só neste navegador, nunca no código da página.
     </p>
-    <div class="campo"><label>URL do Web App (termina em /exec)</label>
-      <input type="text" id="cfgAppsScriptUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
-    <div class="campo" style="margin-top:8px;max-width:320px"><label>Token (a senha definida no script)</label>
-      <input type="text" id="cfgAppsScriptToken"></div>
-    <div class="config-linha" style="margin-top:8px">
-      <label>Backup automático ao lançar</label>
-      <input type="checkbox" id="cfgBackupAutomatico" style="width:auto">
-    </div>
+    <div class="campo"><label>Endereço de conexão (termina em /exec)</label>
+      <input type="text" id="cfgUrlConexao" readonly style="background:var(--papel2)"></div>
     <div class="rodape-acoes">
-      <button class="acao secundario" id="btnSalvarAppsScript">Salvar configuração</button>
       <button class="acao" id="btnSincronizarCotacoes">Atualizar cotações agora</button>
-      <button class="acao secundario" id="btnBackupNuvem">Enviar backup ao Drive</button>
+      <button class="acao secundario" id="btnBaixarAgora">Baixar da planilha agora</button>
+      <button class="acao secundario" id="btnTrocarConexao">Trocar endereço de conexão</button>
     </div>
     <div id="statusSincronizacao" style="margin-top:10px"></div>
 
@@ -550,9 +565,10 @@ function estadoPadrao(){
       tetoSetorPercentual: 25,
       falhasParaSuspeitaDeslistagem: 3,
       pisoLiquidezDiaria: 200000,
-      appsScriptUrl: '',
-      appsScriptToken: '',
-      backupAutomatico: true,
+      // A URL de conexão NÃO fica em `config`, e sim numa chave separada do
+      // localStorage: ela é por aparelho e não deve viajar dentro do estado
+      // que é gravado na planilha (senão um aparelho sobrescreveria o outro).
+
       dataVerificacaoParametrosFiscais: ''
     },
     // Listas editáveis do filtro do Módulo 2 (memorial, seção 5.1).
@@ -608,12 +624,12 @@ function salvarEstado(comSnapshot){
   if(comSnapshot !== false){
     estadoAnterior = JSON.parse(JSON.stringify(estado));
   }
-  try{
-    localStorage.setItem(CHAVE_STORAGE, JSON.stringify(estado));
-    if(typeof talvezBackupAutomatico === 'function') talvezBackupAutomatico();
-  }catch(e){
-    alert('Não foi possível salvar localmente (armazenamento cheio ou bloqueado). Exporte um backup imediatamente.');
-    console.error(e);
+  // grava o espelho local na hora e agenda o envio à planilha, que é a
+  // fonte da verdade. Ver seção "SINCRONIZAÇÃO".
+  if(typeof agendarEnvio === 'function'){
+    agendarEnvio();
+  } else {
+    try{ localStorage.setItem(CHAVE_STORAGE, JSON.stringify(estado)); }catch(e){ console.error(e); }
   }
 }
 
@@ -1881,9 +1897,11 @@ document.getElementById('arquivoImportarJSON').addEventListener('change', (e)=>{
       }
       if(!confirm('Importar este backup vai substituir todos os dados atuais. Confirmar?')) return;
       estado = obj;
-      salvarEstado();
+      recalcularCaixa();   // nunca confiar cegamente no caixa salvo num arquivo externo
+      salvarEstado(false);
+      popularListasFiltro();
       render();
-      alert('Backup importado com sucesso.');
+      alert('Backup importado. Ele será enviado à planilha e passará a valer em todos os aparelhos.');
     }catch(err){
       alert('Não foi possível ler o arquivo: '+err.message);
     }
@@ -2584,35 +2602,152 @@ function renderContexto(){
 
 
 /* ==========================================================================
-   SINCRONIZAÇÃO COM APPS SCRIPT
-   Resolve o que o CSV publicado não resolveu: o Web App do Apps Script
-   devolve JSON com origem liberada, então o navegador consegue ler.
-   O POST usa Content-Type text/plain de propósito — evita a requisição de
-   verificação prévia (preflight), que o Apps Script não trata bem.
+   SINCRONIZAÇÃO — A PLANILHA É A FONTE DA VERDADE
+   Mudança de arquitetura (v3). Antes: localStorage era a fonte da verdade e
+   o Drive guardava retratos ocasionais, o que fazia cada aparelho ter uma
+   carteira própria. Agora: o estado inteiro vive numa célula da planilha; o
+   localStorage é só espelho para uso offline. Mesmo padrão já em uso no app
+   de tarefas do usuário.
+   Modelo de conflito: "última gravação vence" para o estado inteiro. Para um
+   usuário só é risco residual, e o Apps Script guarda a versão anterior em A2.
    ========================================================================== */
 
-function configSincronizacaoOk(){
-  return !!(estado.config.appsScriptUrl && estado.config.appsScriptToken);
+const CHAVE_URL = 'carteiraFormulaMagica_url';
+const CHAVE_PENDENTE = 'carteiraFormulaMagica_pendente';
+let timerEnvio = null;
+
+function obterUrlConexao(){
+  try{ return localStorage.getItem(CHAVE_URL) || ''; }catch(e){ return ''; }
+}
+function definirUrlConexao(u){
+  try{ localStorage.setItem(CHAVE_URL, u); }catch(e){}
+}
+function haPendencia(){
+  try{ return localStorage.getItem(CHAVE_PENDENTE) === '1'; }catch(e){ return false; }
+}
+function definirPendencia(v){
+  try{ localStorage.setItem(CHAVE_PENDENTE, v ? '1' : '0'); }catch(e){}
 }
 
-function statusSinc(html, critico){
-  const el = document.getElementById('statusSincronizacao');
-  if(el) el.innerHTML = `<div class="alerta${critico?' critico':''}">${html}</div>`;
+function indicadorSinc(estadoCor, texto){
+  const cores = { ok:'var(--ok)', busy:'var(--atencao)', err:'var(--falha)' };
+  const ponto = document.getElementById('pontoSinc');
+  const txt = document.getElementById('textoSinc');
+  if(ponto) ponto.style.background = cores[estadoCor] || 'var(--sub)';
+  if(txt) txt.textContent = texto;
+}
+
+function bannerSinc(msg){
+  const b = document.getElementById('bannerSinc');
+  if(!b) return;
+  if(!msg){ b.style.display='none'; b.textContent=''; return; }
+  b.style.display='block';
+  b.textContent = msg;
+}
+
+// Toda alteração passa por aqui: grava local na hora, marca pendência e
+// agenda o envio. O debounce evita uma requisição por tecla digitada.
+function agendarEnvio(){
+  salvarLocal();
+  definirPendencia(true);
+  indicadorSinc('busy','salvando');
+  clearTimeout(timerEnvio);
+  timerEnvio = setTimeout(enviarEstado, 900);
+}
+
+function salvarLocal(){
+  try{ localStorage.setItem(CHAVE_STORAGE, JSON.stringify(estado)); }catch(e){
+    console.error('Falha ao gravar espelho local:', e);
+  }
+}
+
+async function enviarEstado(){
+  const url = obterUrlConexao();
+  if(!url) return false;
+  indicadorSinc('busy','salvando');
+  try{
+    const r = await fetch(url, {
+      method:'POST',
+      // text/plain evita a verificação prévia (preflight), que o Apps
+      // Script não responde bem
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      redirect:'follow',
+      body: JSON.stringify(estado)
+    });
+    if(!r.ok) throw new Error('http '+r.status);
+    let resp = null;
+    try{ resp = await r.json(); }catch(e){ throw new Error('resposta ilegível'); }
+    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
+
+    definirPendencia(false);
+    indicadorSinc('ok','salvo');
+    bannerSinc('');
+    return true;
+  }catch(e){
+    indicadorSinc('err','não salvo na nuvem');
+    bannerSinc('A gravação na planilha não foi confirmada ('+e.message+'). Suas mudanças estão salvas neste aparelho e serão reenviadas na próxima sincronização.');
+    return false;
+  }
+}
+
+async function baixarEstado(){
+  const url = obterUrlConexao();
+  if(!url) return false;
+
+  // Se este aparelho tem alteração ainda não confirmada, baixar apagaria.
+  // Nesse caso envia em vez de baixar.
+  if(haPendencia()){
+    await enviarEstado();
+    render();
+    return true;
+  }
+
+  indicadorSinc('busy','sincronizando');
+  try{
+    const r = await fetch(url, { method:'GET', redirect:'follow' });
+    if(!r.ok) throw new Error('http '+r.status);
+    const resp = await r.json();
+    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
+
+    if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
+      const padrao = estadoPadrao();
+      estado = Object.assign({}, padrao, resp.estado);
+      estado.config = Object.assign({}, padrao.config, resp.estado.config||{});
+      estado.listasFiltro = Object.assign({}, padrao.listasFiltro, resp.estado.listasFiltro||{});
+      estado.mapaTitulos = resp.estado.mapaTitulos || {};
+      estado.snapshotsRanking = resp.estado.snapshotsRanking || [];
+      recalcularCaixa();   // nunca confiar cegamente no caixa vindo de fora
+      salvarLocal();
+    } else if(resp.vazio){
+      // primeira vez: a planilha ainda não tem nada. Sobe o que houver local.
+      await enviarEstado();
+    }
+
+    indicadorSinc('ok', resp.recuperadoDoBackup ? 'sincronizado (recuperado do backup)' : 'sincronizado');
+    bannerSinc(resp.recuperadoDoBackup ? 'A célula principal estava ilegível e os dados foram recuperados do backup automático da versão anterior.' : '');
+    popularListasFiltro();
+    render();
+    return true;
+  }catch(e){
+    indicadorSinc('err','offline');
+    bannerSinc('Sem conexão com a planilha ('+e.message+'). Mostrando a última versão salva neste aparelho. As mudanças sincronizam quando a conexão voltar.');
+    render();
+    return false;
+  }
 }
 
 async function sincronizarCotacoes(silencioso){
-  if(!configSincronizacaoOk()){
-    if(!silencioso) statusSinc('Preencha a URL e o token antes de sincronizar.', true);
-    return false;
-  }
-  if(!silencioso) statusSinc('Buscando cotações…');
+  const url = obterUrlConexao();
+  if(!url) return false;
+  if(!silencioso) indicadorSinc('busy','buscando cotações');
 
   try{
-    const url = estado.config.appsScriptUrl + '?token=' + encodeURIComponent(estado.config.appsScriptToken);
-    const resp = await fetch(url, { method:'GET', redirect:'follow' });
-    const dados = await resp.json();
-
-    if(!dados.ok){ statusSinc('O Apps Script recusou: '+(dados.erro||'erro não informado'), true); return false; }
+    const r = await fetch(url + '?acao=cotacoes', { method:'GET', redirect:'follow' });
+    const dados = await r.json();
+    if(!dados || dados.status !== 'ok'){
+      bannerSinc('Não foi possível buscar as cotações: '+(dados && dados.message ? dados.message : 'erro não informado'));
+      return false;
+    }
 
     let atualizados=0, semPreco=0, novosSuspeitos=[];
     for(const c of dados.cotacoes){
@@ -2628,7 +2763,6 @@ async function sincronizarCotacoes(silencioso){
         info.suspeitaDeslistagem = false;
         atualizados++;
       } else {
-        // mesma regra do CSV: preço bom nunca é sobrescrito por ausência
         info.falhasConsecutivas = (info.falhasConsecutivas||0)+1;
         semPreco++;
         if(info.falhasConsecutivas >= estado.config.falhasParaSuspeitaDeslistagem && !info.suspeitaDeslistagem){
@@ -2641,98 +2775,80 @@ async function sincronizarCotacoes(silencioso){
     }
 
     registrarSnapshotValor();
-    salvarEstado();
+    agendarEnvio();
     render();
 
     let msg = `${atualizados} de ${dados.total} cotações atualizadas.`;
     if(semPreco>0) msg += ` ${semPreco} sem preço nesta consulta.`;
-    if(novosSuspeitos.length>0) msg += ` <b>Suspeita de deslistagem: ${novosSuspeitos.join(', ')}</b> — compra bloqueada até verificação.`;
-    statusSinc(msg);
+    if(novosSuspeitos.length>0) msg += ` Suspeita de deslistagem: ${novosSuspeitos.join(', ')} — compra bloqueada até verificação.`;
+    if(!silencioso) bannerSinc(msg);
     return true;
 
   }catch(err){
-    statusSinc('Falha ao contatar o Apps Script: '+err.message+
-      '. Confira se a implantação está como "Qualquer pessoa" e se a URL termina em /exec.', true);
+    bannerSinc('Falha ao buscar cotações: '+err.message);
     return false;
   }
 }
 
-async function enviarBackupNuvem(silencioso){
-  if(!configSincronizacaoOk()){
-    if(!silencioso) statusSinc('Preencha a URL e o token antes de enviar o backup.', true);
-    return false;
+/* --- Tela de conexão --- */
+
+function mostrarTelaConexao(){
+  document.getElementById('telaConexao').classList.remove('oculto');
+  document.getElementById('inputUrlConexao').value = obterUrlConexao();
+}
+function esconderTelaConexao(){
+  document.getElementById('telaConexao').classList.add('oculto');
+}
+
+document.getElementById('btnConectar').addEventListener('click', async ()=>{
+  const u = document.getElementById('inputUrlConexao').value.trim();
+  const erro = document.getElementById('erroConexao');
+  if(!/^https:\/\//.test(u)){
+    erro.innerHTML = '<div class="alerta critico">O endereço precisa começar com https://</div>';
+    return;
   }
-  if(!silencioso) statusSinc('Enviando backup…');
-
-  try{
-    const resp = await fetch(estado.config.appsScriptUrl, {
-      method:'POST',
-      // text/plain evita o preflight, que o Apps Script não trata bem
-      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-      redirect:'follow',
-      body: JSON.stringify({ token: estado.config.appsScriptToken, dados: estado })
-    });
-    const r = await resp.json();
-    if(!r.ok){ if(!silencioso) statusSinc('O Apps Script recusou o backup: '+(r.erro||''), true); return false; }
-
-    localStorage.setItem(CHAVE_BACKUP_DATA, hoje());
-    renderStatusBackup();
-    if(!silencioso) statusSinc(`Backup gravado no Drive: <b>${r.arquivo}</b>`);
-    return true;
-
-  }catch(err){
-    if(!silencioso) statusSinc('Falha ao enviar backup: '+err.message, true);
-    return false;
+  if(!/\/exec$/.test(u)){
+    erro.innerHTML = '<div class="alerta critico">O endereço precisa terminar em /exec. Se termina em /dev, use a URL da implantação, não a de teste.</div>';
+    return;
   }
-}
-
-// Backup automático, no máximo uma vez por dia, para não fazer requisição a
-// cada clique. Silencioso: nunca interrompe o que você está fazendo.
-function talvezBackupAutomatico(){
-  if(!estado.config.backupAutomatico || !configSincronizacaoOk()) return;
-  const ultimo = localStorage.getItem(CHAVE_BACKUP_DATA);
-  if(ultimo === hoje()) return;
-  enviarBackupNuvem(true);
-}
-
-function salvarConfigAppsScript(){
-  estado.config.appsScriptUrl = document.getElementById('cfgAppsScriptUrl').value.trim();
-  estado.config.appsScriptToken = document.getElementById('cfgAppsScriptToken').value.trim();
-  estado.config.backupAutomatico = document.getElementById('cfgBackupAutomatico').checked;
-  salvarEstado();
-}
-
-document.getElementById('btnSalvarAppsScript').addEventListener('click', ()=>{
-  salvarConfigAppsScript();
-  statusSinc('Configuração salva.');
+  erro.innerHTML = '';
+  definirUrlConexao(u);
+  esconderTelaConexao();
+  await baixarEstado();
+  await sincronizarCotacoes(true);
 });
 
-// Sincronizar e enviar backup salvam os campos automaticamente antes de agir —
-// não depende de "Salvar configuração" ter sido clicado antes. O botão
-// separado continua existindo para quem só quer marcar/desmarcar o backup
-// automático sem disparar uma sincronização.
-document.getElementById('btnSincronizarCotacoes').addEventListener('click', ()=>{
-  salvarConfigAppsScript();
-  sincronizarCotacoes(false);
+window.addEventListener('online', ()=>{
+  if(haPendencia()) enviarEstado(); else baixarEstado();
 });
-document.getElementById('btnBackupNuvem').addEventListener('click', ()=>{
-  salvarConfigAppsScript();
-  enviarBackupNuvem(false);
-});
+
+document.getElementById('btnSincronizarCotacoes').addEventListener('click', ()=> sincronizarCotacoes(false));
+document.getElementById('btnBaixarAgora').addEventListener('click', ()=> baixarEstado());
+document.getElementById('btnTrocarConexao').addEventListener('click', ()=> mostrarTelaConexao());
 
 function popularConfigSincronizacao(){
-  document.getElementById('cfgAppsScriptUrl').value = estado.config.appsScriptUrl || '';
-  document.getElementById('cfgAppsScriptToken').value = estado.config.appsScriptToken || '';
-  document.getElementById('cfgBackupAutomatico').checked = estado.config.backupAutomatico !== false;
+  const el = document.getElementById('cfgUrlConexao');
+  if(el) el.value = obterUrlConexao();
 }
 
 /* ==========================================================================
    INICIALIZAÇÃO
    ========================================================================== */
 
-popularListasFiltro();
-popularConfigSincronizacao();
-render();
+(async function iniciar(){
+  popularListasFiltro();
+  popularConfigSincronizacao();
+  render();
+
+  if(!obterUrlConexao()){
+    mostrarTelaConexao();
+    indicadorSinc('err','sem conexão configurada');
+    return;
+  }
+  await baixarEstado();
+  popularConfigSincronizacao();
+  await sincronizarCotacoes(true);
+})();
 </script>
 <script>
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
