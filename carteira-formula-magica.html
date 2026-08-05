@@ -4,13 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Carteira — Fórmula Mágica</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#12161a">
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Carteira FM">
 <style>
   :root{
     --papel:#e8e6e1; --papel2:#f4f3f0; --tinta:#12161a; --sub:#5c6169;
@@ -2894,14 +2887,6 @@ function popularConfigSincronizacao(){
   popularConfigSincronizacao();
   await sincronizarCotacoes(true);
 })();
-</script>
-<script>
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('service-worker.js')
-        .catch(err => console.warn('Service worker não registrado:', err));
-    });
-  }
 </script>
 </body>
 </html>
