@@ -2695,16 +2695,30 @@ function talvezBackupAutomatico(){
   enviarBackupNuvem(true);
 }
 
-document.getElementById('btnSalvarAppsScript').addEventListener('click', ()=>{
+function salvarConfigAppsScript(){
   estado.config.appsScriptUrl = document.getElementById('cfgAppsScriptUrl').value.trim();
   estado.config.appsScriptToken = document.getElementById('cfgAppsScriptToken').value.trim();
   estado.config.backupAutomatico = document.getElementById('cfgBackupAutomatico').checked;
   salvarEstado();
+}
+
+document.getElementById('btnSalvarAppsScript').addEventListener('click', ()=>{
+  salvarConfigAppsScript();
   statusSinc('Configuração salva.');
 });
 
-document.getElementById('btnSincronizarCotacoes').addEventListener('click', ()=> sincronizarCotacoes(false));
-document.getElementById('btnBackupNuvem').addEventListener('click', ()=> enviarBackupNuvem(false));
+// Sincronizar e enviar backup salvam os campos automaticamente antes de agir —
+// não depende de "Salvar configuração" ter sido clicado antes. O botão
+// separado continua existindo para quem só quer marcar/desmarcar o backup
+// automático sem disparar uma sincronização.
+document.getElementById('btnSincronizarCotacoes').addEventListener('click', ()=>{
+  salvarConfigAppsScript();
+  sincronizarCotacoes(false);
+});
+document.getElementById('btnBackupNuvem').addEventListener('click', ()=>{
+  salvarConfigAppsScript();
+  enviarBackupNuvem(false);
+});
 
 function popularConfigSincronizacao(){
   document.getElementById('cfgAppsScriptUrl').value = estado.config.appsScriptUrl || '';
