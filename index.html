@@ -167,6 +167,9 @@
       <div class="card painel-item"><div class="rot">Posições</div><div class="val num" id="pPosicoes">—</div><div class="obs" id="pPosicoesObs"></div></div>
     </div>
 
+    <h2>Disciplina do plano</h2>
+    <div id="painelDisciplina"></div>
+
     <h2>Evolução patrimonial</h2>
     <div id="containerGrafico" class="card"></div>
 
@@ -186,11 +189,11 @@
       <table id="tabelaPosicoes"><thead><tr>
         <th>Ticker</th><th>Status</th><th>Elegível</th><th>Qtd.</th><th>Preço médio</th>
         <th>Preço atual</th><th>Valor</th><th>Rent.</th><th>Rent. R$</th>
-        <th>Abertura</th><th>Aniversário</th><th>Dist. máx/mín 52s</th><th></th>
+        <th>Abertura</th><th>Aniversário</th><th>Dist. máx/mín 52s</th><th>Tendência (MM50/MM200)</th><th></th>
       </tr></thead><tbody></tbody></table>
     </div>
     <div class="msg-vazio oculto" id="msgSemPosicoes2">Nenhuma posição lançada ainda.</div>
-    <p class="nota">Distância de máxima/mínima de 52 semanas é informação de contexto, não sinal de compra ou venda.</p>
+    <p class="nota">Distância de máxima/mínima de 52 semanas e tendência de médias móveis são informação de contexto, não sinal de compra ou venda.</p>
   </section>
 
   <!-- ===================== RANKING (MÓDULO 2) ===================== -->
@@ -229,10 +232,14 @@
       <p class="nota">
         DY acima de 30% é sinalizado, não excluído — costuma indicar provento extraordinário que não se repete.
         O corte de elegibilidade (<span id="topNLabel"></span>) está destacado; abaixo dele a linha aparece esmaecida.
+        MM50/MM200 e Qualidade só aparecem se você configurou a sincronização de cotações com essas colunas —
+        são <b>informação para apoiar a decisão, não filtro</b>: nada aqui exclui um papel do ranking nem muda a
+        soma. Qualidade é um escore parcial (0-5): ROA, margem EBIT e crescimento de receita positivos, liquidez
+        corrente acima de 1, dívida líquida/patrimônio dentro do teto configurado — passe o mouse para ver o detalhe.
       </p>
       <div class="tabela-scroll">
         <table id="tabelaRanking"><thead><tr>
-          <th>#</th><th>Ticker</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th>
+          <th>#</th><th>Ticker</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th><th>MM50</th><th>MM200</th><th>Qualidade*</th>
         </tr></thead><tbody></tbody></table>
       </div>
 
@@ -299,7 +306,7 @@
     <div class="tabela-scroll">
       <table id="tabelaContexto"><thead><tr>
         <th>Ticker</th><th>Preço atual</th><th>EV/EBIT no ranking</th><th>Posição no ranking</th>
-        <th>Preço-teto/entrada estimado</th><th>Distância</th><th>Ranking de</th>
+        <th>Preço-teto/entrada estimado</th><th>Distância</th><th>Qualidade*</th><th>Ranking de</th>
       </tr></thead><tbody></tbody></table>
     </div>
     <div class="msg-vazio oculto" id="msgSemContexto"></div>
@@ -482,6 +489,8 @@
         <div class="campo"><label>Preço (R$)</label><input type="number" id="mpPreco" min="0" step="0.01" required></div>
         <div class="campo"><label>Máxima 52 sem. (opcional)</label><input type="number" id="mpMax52" min="0" step="0.01"></div>
         <div class="campo"><label>Mínima 52 sem. (opcional)</label><input type="number" id="mpMin52" min="0" step="0.01"></div>
+        <div class="campo"><label>MM50 (opcional)</label><input type="number" id="mpMM50" min="0" step="0.01"></div>
+        <div class="campo"><label>MM200 (opcional)</label><input type="number" id="mpMM200" min="0" step="0.01"></div>
         <button type="submit" class="acao">Atualizar</button>
       </form>
     </div>
@@ -566,6 +575,8 @@ function estadoPadrao(){
       tetoSetorPercentual: 25,
       falhasParaSuspeitaDeslistagem: 3,
       pisoLiquidezDiaria: 200000,
+      horizonteAnos: 5,
+      escoreDividaMaxima: 1.0,
       // A URL de conexão NÃO fica em `config`, e sim numa chave separada do
       // localStorage: ela é por aparelho e não deve viajar dentro do estado
       // que é gravado na planilha (senão um aparelho sobrescreveria o outro).
@@ -979,10 +990,23 @@ function numBR(s){
   return isNaN(v) ? null : v;
 }
 
+function normalizarNomeColuna(s){
+  return s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // remove acentos
+    .replace(/[.\s]/g,'');                              // remove espaços e pontos
+}
+
 function localizarColuna(cabecalho, candidatos){
-  const lower = cabecalho.map(c=>c.toLowerCase().trim());
+  // Normaliza espaços/pontos/acentos ANTES de comparar — cabeçalhos reais
+  // variam nisso entre fontes (ex.: "DIV. LIQ. / PATRI." tem espaço nos dois
+  // lados da barra; um candidato sem esse espaço não batia por causa disso,
+  // não por a coluna não existir. Achado em 05/08/2026: fazia o critério de
+  // dívida do escore de qualidade falhar para os 164 candidatos de um CSV
+  // real, silenciosamente — nenhum "erro", só sempre "sem dado".
+  const normalizado = cabecalho.map(c=>normalizarNomeColuna(c));
   for(const cand of candidatos){
-    const i = lower.findIndex(c=>c.includes(cand));
+    const candNorm = normalizarNomeColuna(cand);
+    const i = normalizado.findIndex(c=>c.includes(candNorm));
     if(i>=0) return i;
   }
   return -1;
@@ -996,6 +1020,8 @@ function importarCSVPrecos(texto){
   const iPreco = localizarColuna(cab, ['preco','preço','price','cotação','cotacao']);
   const iMax = localizarColuna(cab, ['max52','máxima','maxima','high52']);
   const iMin = localizarColuna(cab, ['min52','mínima','minima','low52']);
+  const iMM50 = localizarColuna(cab, ['mm50','media movel 50','média móvel 50']);
+  const iMM200 = localizarColuna(cab, ['mm200','media movel 200','média móvel 200']);
   if(iTicker<0 || iPreco<0){
     return { ok:false, msg:'Não encontrei colunas de Ticker e Preço no cabeçalho: '+cab.join(' | ') };
   }
@@ -1008,8 +1034,10 @@ function importarCSVPrecos(texto){
     const preco = numBR(l[iPreco]);
     const max52 = iMax>=0 ? numBR(l[iMax]) : null;
     const min52 = iMin>=0 ? numBR(l[iMin]) : null;
+    const mm50 = iMM50>=0 ? numBR(l[iMM50]) : null;
+    const mm200 = iMM200>=0 ? numBR(l[iMM200]) : null;
 
-    if(!estado.precos[ticker]) estado.precos[ticker] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+    if(!estado.precos[ticker]) estado.precos[ticker] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, mm50:null, mm200:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
     const info = estado.precos[ticker];
 
     if(preco!==null){
@@ -1029,6 +1057,8 @@ function importarCSVPrecos(texto){
     }
     if(max52!==null) info.maxima52 = max52;
     if(min52!==null) info.minima52 = min52;
+    if(mm50!==null) info.mm50 = mm50;
+    if(mm200!==null) info.mm200 = mm200;
   }
   registrarSnapshotValor();
   salvarEstado();
@@ -1064,6 +1094,14 @@ function processarRanking(texto, criterio){
   const iDy     = localizarColuna(cab, ['dy','div.yield','dividend yield']);
   const iPl     = localizarColuna(cab, ['p/l','p / l']);
   const iPreco  = localizarColuna(cab, ['preco','preço','cotação','cotacao']);
+  // Colunas do escore parcial de qualidade — seção "Alavanca 4" da análise
+  // de 05/08/2026. Informativo, nunca entra na soma do ranking nem exclui
+  // candidato; existe para desempate visual entre papéis próximos no ranking.
+  const iRoa       = localizarColuna(cab, ['roa']);
+  const iMargemEbit= localizarColuna(cab, ['margem ebit','marg. ebit','mrg ebit']);
+  const iLiqCorr   = localizarColuna(cab, ['liq. corrente','liquidez corrente','liq corrente']);
+  const iDivPatri  = localizarColuna(cab, ['div. liq./ patri','div liq patri','divida liquida/patrimonio','dív. líq./patri']);
+  const iCagrRec   = localizarColuna(cab, ['cagr receitas 5 anos','cresc. rec.5a','crescimento da receita']);
 
   if(iTicker<0 || iEvEbit<0 || iRoic<0){
     return { ok:false, msg:'Não encontrei colunas de Ticker, EV/EBIT e ROIC no cabeçalho: '+cab.join(' | ') };
@@ -1106,7 +1144,27 @@ function processarRanking(texto, criterio){
     if(criterio==='pl_roe' && (pl===null || pl<=0 || roe===null || roe<=0)){
       excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue;
     }
-    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv });
+
+    // Escore parcial de qualidade (0-5), informativo — nunca filtra nem
+    // entra na soma do ranking. Cinco checagens simples com o que o CSV do
+    // StatusInvest já traz; não é um F-Score de Piotroski completo (faltam
+    // fluxo de caixa operacional e variação ano a ano de contas).
+    const roa      = iRoa>=0 ? numBR(l[iRoa]) : null;
+    const margEbit = iMargemEbit>=0 ? numBR(l[iMargemEbit]) : null;
+    const liqCorr  = iLiqCorr>=0 ? numBR(l[iLiqCorr]) : null;
+    const divPatri = iDivPatri>=0 ? numBR(l[iDivPatri]) : null;
+    const cagrRec  = iCagrRec>=0 ? numBR(l[iCagrRec]) : null;
+    const criterios = [
+      { nome:'ROA positivo', ok: roa!==null && roa>0 },
+      { nome:'Margem EBIT positiva', ok: margEbit!==null && margEbit>0 },
+      { nome:'Liquidez corrente > 1', ok: liqCorr!==null && liqCorr>1 },
+      { nome:'Dívida líq./patrimônio abaixo do teto', ok: divPatri!==null && divPatri < estado.config.escoreDividaMaxima },
+      { nome:'Crescimento de receita 5a positivo', ok: cagrRec!==null && cagrRec>0 }
+    ];
+    const escoreQualidade = criterios.filter(c=>c.ok).length;
+    const escoreDetalhe = criterios.map(c=>`${c.ok?'✓':'✗'} ${c.nome}`).join(' · ');
+
+    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv, escoreQualidade, escoreDetalhe });
   }
 
   // deduplicação por raiz, mantendo a classe mais líquida (memorial 5.1, regra 8)
@@ -1172,7 +1230,74 @@ function render(){
   renderStatusBackup();
 }
 
+/* ==========================================================================
+   PAINEL DE DISCIPLINA/ADERÊNCIA
+   A maior fonte de perda de retorno em estratégias de valor não é a seleção
+   de ações, é abandonar o plano no ano ruim (análise de 05/08/2026). Este
+   painel não julga nem bloqueia nada — só mantém visível o horizonte
+   declarado e a regularidade dos aportes, e lembra a expectativa calibrada
+   quando a carteira está no negativo pela métrica comparável ao índice.
+   ========================================================================== */
+
+function primeiroAporte(){
+  const datasFluxo = estado.fluxosExternos.filter(f=>f.tipo==='aporte').map(f=>f.data);
+  const datasCompra = estado.lotes.filter(l=>l.tipo==='compra').map(l=>l.data);
+  const todas = datasFluxo.concat(datasCompra);
+  if(todas.length===0) return null;
+  return todas.sort()[0];
+}
+
+function mesesEntre(d1,d2){
+  const a = new Date(d1+'T00:00:00'), b = new Date(d2+'T00:00:00');
+  return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
+}
+
+function mesesComAporte(){
+  return new Set(estado.fluxosExternos.filter(f=>f.tipo==='aporte').map(f=>f.data.slice(0,7)));
+}
+
+function renderDisciplina(){
+  const cont = document.getElementById('painelDisciplina');
+  const inicio = primeiroAporte();
+
+  if(!inicio){
+    cont.innerHTML = '<div class="msg-vazio">Sem aportes registrados ainda — o painel aparece a partir do primeiro.</div>';
+    return;
+  }
+
+  const horizonteMeses = estado.config.horizonteAnos * 12;
+  const decorridos = Math.max(0, mesesEntre(inicio, hoje()));
+  const pctHorizonte = Math.min(1, horizonteMeses>0 ? decorridos/horizonteMeses : 0);
+
+  const totalMesesJanela = Math.max(1, decorridos+1);
+  const mesesAportados = mesesComAporte().size;
+  const aderencia = Math.min(1, mesesAportados/totalMesesJanela);
+
+  let html = `<div class="grid-paineis">
+    <div class="card painel-item"><div class="rot">Horizonte declarado</div>
+      <div class="val num">${decorridos} / ${horizonteMeses} meses</div>
+      <div class="obs">${(pctHorizonte*100).toFixed(0)}% de um plano de ${estado.config.horizonteAnos} anos, desde ${fmtData(inicio)}</div></div>
+    <div class="card painel-item"><div class="rot">Aderência de aportes</div>
+      <div class="val num">${(aderencia*100).toFixed(0)}%</div>
+      <div class="obs">${mesesAportados} de ${totalMesesJanela} meses com aporte registrado</div></div>
+  </div>`;
+
+  const twr = calcularTWR();
+  if(twr !== null && twr < 0){
+    html += `<div class="alerta" style="margin-top:10px">
+      A carteira está no negativo pela TWR (comparável ao índice). Isso é esperado dentro do método —
+      historicamente a fórmula mágica perde do mercado em cerca de 1 a cada 4 anos, às vezes por margem
+      larga. O horizonte declarado é de ${estado.config.horizonteAnos} anos: um ano isolado não é o teste
+      da estratégia. O erro mais caro nesse momento costuma ser abandonar o plano, não a ação escolhida.
+    </div>`;
+  }
+
+  cont.innerHTML = html;
+}
+
 function renderPainel(){
+  renderDisciplina();
+
   const calc = todasPosicoesCalculadas();
   const valorAcoes = calc.reduce((s,c)=> s+(c.valorMercado||0), 0);
   const valorTotal = valorAcoes + (estado.caixa.saldo||0);
@@ -1376,6 +1501,14 @@ function renderPosicoes(){
 
   for(const c of calc){
     const distTxt = c.distMax!==null ? `${fmtPct(c.distMax,0)} da máx · ${c.distMin!==null?fmtPct(c.distMin,0):'—'} da mín` : '—';
+    const tendTxt = (()=>{
+      const info = c.infoPreco;
+      if(!info || (!info.mm50 && !info.mm200) || c.precoAtual===null) return '—';
+      const partes = [];
+      if(info.mm50) partes.push(`MM50 ${fmtMoeda(info.mm50)}${c.precoAtual<info.mm50?' <span class="badge-desl">abaixo</span>':''}`);
+      if(info.mm200) partes.push(`MM200 ${fmtMoeda(info.mm200)}${c.precoAtual<info.mm200?' <span class="badge-desl">abaixo</span>':''}`);
+      return partes.join(' · ');
+    })();
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${c.pos.ticker}${c.infoPreco&&c.infoPreco.suspeitaDeslistagem?' <span class="badge-desl">deslistagem?</span>':''}</td>
@@ -1390,6 +1523,7 @@ function renderPosicoes(){
       <td>${fmtData(c.pos.dataAbertura)}</td>
       <td>${fmtData(c.aniversario)}</td>
       <td>${distTxt}</td>
+      <td>${tendTxt}</td>
       <td>${c.pos.status==='incompleta'?`<button class="acao pequeno secundario" data-completar="${c.pos.id}">Completar</button>`:''}</td>`;
     tbody.appendChild(tr);
   }
@@ -1441,7 +1575,9 @@ function renderConfig(){
     ['limiteIsencaoMensal','Limite de isenção mensal de IR (R$)'],
     ['aliquotaGanho','Alíquota sobre ganho (ex.: 0.15)'],
     ['tetoSetorPercentual','Teto por setor (%)'],
-    ['falhasParaSuspeitaDeslistagem','Falhas consecutivas p/ suspeita de deslistagem']
+    ['falhasParaSuspeitaDeslistagem','Falhas consecutivas p/ suspeita de deslistagem'],
+    ['horizonteAnos','Horizonte declarado do plano (anos)'],
+    ['escoreDividaMaxima','Teto de dívida líq./patrimônio p/ escore de qualidade']
   ];
   const cont = document.getElementById('listaConfig');
   cont.innerHTML='';
@@ -1698,7 +1834,7 @@ document.getElementById('formAporte').addEventListener('submit', (e)=>{
 document.getElementById('formPrecoManual').addEventListener('submit', (e)=>{
   e.preventDefault();
   const ticker = document.getElementById('mpTicker').value.toUpperCase().trim();
-  if(!estado.precos[ticker]) estado.precos[ticker] = {ultimoValido:null,dataUltimoValido:null,maxima52:null,minima52:null,falhasConsecutivas:0,suspeitaDeslistagem:false};
+  if(!estado.precos[ticker]) estado.precos[ticker] = {ultimoValido:null,dataUltimoValido:null,maxima52:null,minima52:null,mm50:null,mm200:null,falhasConsecutivas:0,suspeitaDeslistagem:false};
   const info = estado.precos[ticker];
   info.ultimoValido = parseFloat(document.getElementById('mpPreco').value);
   info.dataUltimoValido = hoje();
@@ -1706,8 +1842,12 @@ document.getElementById('formPrecoManual').addEventListener('submit', (e)=>{
   info.suspeitaDeslistagem = false;
   const max52 = document.getElementById('mpMax52').value;
   const min52 = document.getElementById('mpMin52').value;
+  const mm50 = document.getElementById('mpMM50').value;
+  const mm200 = document.getElementById('mpMM200').value;
   if(max52) info.maxima52 = parseFloat(max52);
   if(min52) info.minima52 = parseFloat(min52);
+  if(mm50) info.mm50 = parseFloat(mm50);
+  if(mm200) info.mm200 = parseFloat(mm200);
   registrarSnapshotValor();
   salvarEstado();
   e.target.reset();
@@ -1778,7 +1918,7 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
     estado.snapshotsRanking.push({
       data: hoje(), origem: 'statusinvest',
       criterio: r.criterio,
-      linhas: r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco }))
+      linhas: r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade }))
     });
     salvarEstado();
 
@@ -1843,7 +1983,19 @@ function renderBlocoRanking(r){
         if(c.preco===null || r.criterio==='pl_roe') return '—';
         const cruz = precoCruzamentoTopN(linhasParaSimulacao, {ticker:c.ticker, evEbit:c.evEbit, preco:c.preco}, topN);
         return cruz ? fmtMoeda(cruz.precoCruzamento) : '—';
-      })()}</td>`;
+      })()}</td>
+      <td class="num">${(()=>{
+        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
+        return (info && info.mm50) ? fmtMoeda(info.mm50) : '—';
+      })()}</td>
+      <td class="num">${(()=>{
+        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
+        if(!info || !info.mm200) return '—';
+        const precoRef = info.ultimoValido;
+        const abaixo = precoRef!==null && precoRef < info.mm200;
+        return fmtMoeda(info.mm200) + (abaixo ? ' <span class="badge-desl">abaixo</span>' : '');
+      })()}</td>
+      <td class="num" title="${c.escoreDetalhe}">${c.escoreQualidade}/5</td>`;
     tbody.appendChild(tr);
   }
 }
@@ -2582,7 +2734,8 @@ function contextoParaTicker(ticker){
     posicaoRanking: linha.posicao,
     precoNoSnapshot: linha.preco,
     dentroTopN: cruzamento.dentroAgora,
-    precoAlvo: cruzamento.precoCruzamento
+    precoAlvo: cruzamento.precoCruzamento,
+    escoreQualidade: linha.escoreQualidade!==undefined ? linha.escoreQualidade : null
   };
 }
 
@@ -2608,7 +2761,7 @@ function renderContexto(){
     const tr = document.createElement('tr');
     if(!ctx){
       tr.innerHTML = `<td>${p.ticker}</td><td class="num">${c.precoAtual!==null?fmtMoeda(c.precoAtual):'—'}</td>
-        <td colspan="5" class="nota">sem dado deste ticker no último ranking importado</td>`;
+        <td colspan="6" class="nota">sem dado deste ticker no último ranking importado</td>`;
       tbody.appendChild(tr);
       continue;
     }
@@ -2621,6 +2774,7 @@ function renderContexto(){
       <td class="num">${ctx.posicaoRanking!=null?ctx.posicaoRanking:'—'} / ${estado.config.topN}</td>
       <td class="num">${fmtMoeda(ctx.precoAlvo)} <span class="nota">(${rotulo})</span></td>
       <td class="num${ctx.dentroTopN?' '+classeSinal(-distancia):''}">${distancia!==null?fmtPct(distancia,1):'—'}</td>
+      <td class="num">${ctx.escoreQualidade!==null?ctx.escoreQualidade+'/5':'—'}</td>
       <td>${fmtData(ctx.dataSnapshot)}</td>`;
     tbody.appendChild(tr);
   }
@@ -2798,7 +2952,7 @@ async function sincronizarCotacoes(silencioso){
     for(const c of dados.cotacoes){
       const ticker = c.ticker;
       if(!estado.precos[ticker]) estado.precos[ticker] =
-        { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+        { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, mm50:null, mm200:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
       const info = estado.precos[ticker];
 
       if(c.preco !== null && c.preco !== undefined){
@@ -2817,6 +2971,8 @@ async function sincronizarCotacoes(silencioso){
       }
       if(c.max52!==null && c.max52!==undefined) info.maxima52 = c.max52;
       if(c.min52!==null && c.min52!==undefined) info.minima52 = c.min52;
+      if(c.mm50!==null && c.mm50!==undefined) info.mm50 = c.mm50;
+      if(c.mm200!==null && c.mm200!==undefined) info.mm200 = c.mm200;
     }
 
     registrarSnapshotValor();
