@@ -237,9 +237,15 @@
         soma. Qualidade é um escore parcial (0-5): ROA, margem EBIT e crescimento de receita positivos, liquidez
         corrente acima de 1, dívida líquida/patrimônio dentro do teto configurado — passe o mouse para ver o detalhe.
       </p>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="checkbox" id="chkDestacarMelhorSetor" style="width:auto">
+        <label for="chkDestacarMelhorSetor" style="text-transform:none;font-size:13px;color:var(--tinta)">
+          Destacar apenas a melhor posicionada de cada setor (só realce visual — nenhuma linha some, nenhum dado muda)
+        </label>
+      </div>
       <div class="tabela-scroll">
         <table id="tabelaRanking"><thead><tr>
-          <th>#</th><th>Ticker</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th><th>MM50</th><th>MM200</th><th>Qualidade*</th>
+          <th>#</th><th>Ticker</th><th>Setor</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th><th>MM50</th><th>MM200</th><th>Qualidade*</th>
         </tr></thead><tbody></tbody></table>
       </div>
 
@@ -257,6 +263,16 @@
     <div class="campo" style="margin-top:8px;max-width:260px"><label>Piso de liquidez diária (R$)</label>
       <input type="number" id="pisoLiquidez" min="0" step="1000"></div>
     <button class="acao secundario" id="btnSalvarListas" style="margin-top:8px">Salvar listas e piso</button>
+
+    <h2>Mapa de setores</h2>
+    <p class="nota">
+      Um <code>TICKER=Setor</code> por linha (use a raiz do ticker, sem o número — ex.: <code>RIAA=Vestuário</code>
+      cobre RIAA3). Alimenta a coluna Setor do ranking, o destaque de melhor-por-setor, e o aviso de
+      concentração na tela de compra. Cresce conforme você completa tickers novos — a ferramenta não inventa
+      setor para o que não conhece.
+    </p>
+    <div class="campo"><textarea id="mapaSetoresTexto" style="min-height:140px;font-size:12px"></textarea></div>
+    <button class="acao secundario" id="btnSalvarMapaSetores" style="margin-top:8px">Salvar mapa de setores</button>
   </section>
 
   <!-- ===================== CALENDÁRIO (MÓDULO 3) ===================== -->
@@ -332,6 +348,7 @@
     <!-- COMPRA -->
     <div class="sub-tela" id="sub-compra">
       <div id="sugestaoAlocacao" class="alerta oculto"></div>
+      <div id="avisoConcentracao" style="margin-bottom:10px"></div>
       <form id="formCompra" class="linha2">
         <div class="campo"><label>Ticker</label><input type="text" id="cTicker" placeholder="ex.: PLPL3" required></div>
         <div class="campo"><label>Empresa (opcional)</label><input type="text" id="cEmpresa"></div>
@@ -594,6 +611,27 @@ function estadoPadrao(){
     // corretagem) -> ticker. A nota não traz o ticker, só nome + classe.
     // Aprende conforme o usuário confirma cada importação.
     mapaTitulos: {},
+    // Correspondência ticker -> setor, usada para a coluna informativa do
+    // Ranking, o destaque de melhor-por-setor, e o aviso preventivo de
+    // concentração na compra. Semeado em 05/08/2026 com o que foi confirmado
+    // por busca nesta conversa (fonte: classificação setorial B3, nível
+    // Segmento). Cresce conforme você completa tickers novos — mesmo padrão
+    // do mapaTitulos.
+    mapaSetores: {
+      RIAA:'Vestuário', CEAB:'Vestuário', LREN:'Vestuário', AMAR:'Vestuário',
+      SEER:'Serviços Educacionais', CSED:'Serviços Educacionais', COGN:'Serviços Educacionais', ANIM:'Serviços Educacionais', YDUQ:'Serviços Educacionais',
+      PLPL:'Construção Civil', JHSF:'Construção Civil', MDNE:'Construção Civil', TEND:'Construção Civil',
+      MRVE:'Construção Civil', CYRE:'Construção Civil', EZTC:'Construção Civil', EVEN:'Construção Civil',
+      DIRR:'Construção Civil', CURY:'Construção Civil', LAVV:'Construção Civil', TRIS:'Construção Civil',
+      ALLD:'Comércio e Distribuição', MGLU:'Comércio e Distribuição', BHIA:'Comércio e Distribuição',
+      CVCB:'Viagens e Turismo',
+      PETR:'Petróleo, Gás e Biocombustíveis', PRIO:'Petróleo, Gás e Biocombustíveis', RECV:'Petróleo, Gás e Biocombustíveis',
+      VALE:'Mineração', CSNA:'Siderurgia', GGBR:'Siderurgia', GOAU:'Siderurgia', USIM:'Siderurgia',
+      SUZB:'Papel e Celulose', KLBN:'Papel e Celulose',
+      ABEV:'Bebidas', WEGE:'Máquinas e Equipamentos',
+      TIMS:'Telecomunicações', VIVT:'Telecomunicações',
+      PGMN:'Comércio Farmacêutico', RADL:'Comércio Farmacêutico', PNVL:'Comércio Farmacêutico'
+    },
     posicoes: [],
     lotes: [],
     eventos: [],
@@ -624,6 +662,7 @@ function carregarEstado(){
     obj.config = Object.assign({}, padrao.config, obj.config||{});
     obj.listasFiltro = Object.assign({}, padrao.listasFiltro, obj.listasFiltro||{});
     obj.mapaTitulos = obj.mapaTitulos || {};
+    obj.mapaSetores = Object.assign({}, padrao.mapaSetores, obj.mapaSetores||{});
     obj.snapshotsRanking = obj.snapshotsRanking || [];
     return obj;
   }catch(e){
@@ -1078,6 +1117,34 @@ function raizTicker(ticker){
   return ticker.replace(/\d+$/, '');
 }
 
+function setorDoTicker(ticker){
+  return estado.mapaSetores[raizTicker(ticker.toUpperCase().trim())] || null;
+}
+
+// Exposição atual por setor, calculada sobre as posições ABERTAS (não
+// encerradas), usando o campo "setor" gravado em cada posição — que por sua
+// vez é preenchido a partir de setorDoTicker() quando conhecido, ou digitado
+// à mão. Reaproveitada pelo alerta do painel e pelo aviso preventivo na
+// compra (seção 05/08/2026: mover a checagem de concentração para ANTES da
+// compra, comparando contra o que já está na carteira — não contra o
+// ranking do mês, que não sabe o que você já possui).
+function exposicaoPorSetor(){
+  const calc = todasPosicoesCalculadas();
+  // Fallback para custo investido quando ainda não há preço de mercado
+  // sincronizado (achado em teste, 05/08/2026): sem isso, uma posição recém
+  // comprada conta como 0 na exposição por setor até você atualizar o
+  // preço, escondendo concentração real logo depois da compra — exatamente
+  // quando o aviso mais precisa funcionar.
+  const valorDe = c => c.valorMercado!==null ? c.valorMercado : c.custoOriginal;
+  const valorAcoes = calc.reduce((s,c)=> s + (c.pos.status!=='encerrada' ? valorDe(c) : 0), 0);
+  const porSetor = {};
+  for(const c of calc){
+    if(c.pos.status==='encerrada' || !c.pos.setor) continue;
+    porSetor[c.pos.setor] = (porSetor[c.pos.setor]||0) + valorDe(c);
+  }
+  return { valorAcoes, porSetor };
+}
+
 function processarRanking(texto, criterio){
   criterio = criterio || 'evebit_roic';
   const linhas = parseCSV(texto);
@@ -1375,15 +1442,13 @@ function renderPainel(){
       alertas.push({tipo:'atencao', txt:`${ticker}: preço desatualizado desde ${fmtData(info.dataUltimoValido)}.`});
     }
   }
-  // teto de setor
-  const porSetor = {};
-  for(const c of calc){
-    if(c.pos.status==='encerrada' || !c.pos.setor) continue;
-    porSetor[c.pos.setor] = (porSetor[c.pos.setor]||0) + (c.valorMercado||0);
-  }
-  if(valorAcoes>0){
-    for(const [setor,v] of Object.entries(porSetor)){
-      const pct = v/valorAcoes*100;
+  // teto de setor — usa valorAcoes E porSetor do MESMO cálculo (ambos com
+  // fallback de custo quando não há preço de mercado), para não dividir um
+  // numerador que conta posições sem preço por um denominador que não conta.
+  const expSetor = exposicaoPorSetor();
+  if(expSetor.valorAcoes>0){
+    for(const [setor,v] of Object.entries(expSetor.porSetor)){
+      const pct = v/expSetor.valorAcoes*100;
       if(pct > estado.config.tetoSetorPercentual){
         alertas.push({tipo:'atencao', txt:`Setor "${setor}" representa ${pct.toFixed(1)}% da carteira, acima do teto de ${estado.config.tetoSetorPercentual}%.`});
       }
@@ -1634,6 +1699,47 @@ document.getElementById('eTipo').addEventListener('change', (e)=>{
    FORMULÁRIOS
    ========================================================================== */
 
+// Aviso preventivo de concentração por setor — checagem movida para ANTES
+// da compra (05/08/2026), comparando contra o que a carteira JÁ TEM, não
+// contra o ranking do mês. Auto-preenche "Setor" quando o ticker é
+// conhecido no mapa; nunca bloqueia o envio do formulário, só informa.
+function atualizarAvisoConcentracao(){
+  const ticker = document.getElementById('cTicker').value.toUpperCase().trim();
+  const div = document.getElementById('avisoConcentracao');
+  if(!ticker){ div.innerHTML=''; return; }
+
+  const setorConhecido = setorDoTicker(ticker);
+  const campoSetor = document.getElementById('cSetor');
+  if(setorConhecido && !campoSetor.value) campoSetor.value = setorConhecido;
+
+  const setor = campoSetor.value.trim();
+  if(!setor){
+    div.innerHTML = setorConhecido ? '' : `<p class="nota">Setor não reconhecido para ${ticker} — preencha manualmente, ou complete o mapa de setores na aba Ranking.</p>`;
+    return;
+  }
+
+  const { valorAcoes, porSetor } = exposicaoPorSetor();
+  const atual = porSetor[setor] || 0;
+  const qtd = parseFloat(document.getElementById('cQtd').value) || 0;
+  const preco = parseFloat(document.getElementById('cPreco').value) || 0;
+  const valorCompra = qtd*preco;
+
+  const totalDepois = valorAcoes + valorCompra;
+  const setorDepois = atual + valorCompra;
+  const pctAntes = valorAcoes>0 ? (atual/valorAcoes*100) : 0;
+  const pctDepois = totalDepois>0 ? (setorDepois/totalDepois*100) : 0;
+  const teto = estado.config.tetoSetorPercentual;
+
+  const excede = pctDepois > teto;
+  div.innerHTML = `<div class="${excede?'alerta':'nota'}">
+    Setor "${setor}": ${pctAntes.toFixed(1)}% da carteira hoje${valorCompra>0?` → ${pctDepois.toFixed(1)}% com esta compra`:''}
+    ${excede ? ` — acima do teto configurado de ${teto}%.` : ''}
+  </div>`;
+}
+
+['cTicker','cSetor','cQtd','cPreco'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', atualizarAvisoConcentracao);
+});
 document.getElementById('cTicker').addEventListener('input', mostrarSugestaoAlocacao);
 
 document.getElementById('formCompra').addEventListener('submit', (e)=>{
@@ -1710,6 +1816,7 @@ document.getElementById('formCompra').addEventListener('submit', (e)=>{
   e.target.reset();
   document.getElementById('cData').value = hoje();
   document.getElementById('sugestaoAlocacao').classList.add('oculto');
+  document.getElementById('avisoConcentracao').innerHTML = '';
   mudarTela('posicoes');
   if(!eraEdicao){
     alert(`Compra lançada. Posição ${ticker} está como "incompleta" — marque como completa na tela Posições quando considerar o tamanho adequado.`);
@@ -1894,6 +2001,8 @@ function popularListasFiltro(){
   document.getElementById('listaFinanceiras').value = estado.listasFiltro.financeiras.join(', ');
   document.getElementById('listaRecJudicial').value = estado.listasFiltro.recuperacaoJudicial.join(', ');
   document.getElementById('pisoLiquidez').value = estado.config.pisoLiquidezDiaria;
+  document.getElementById('mapaSetoresTexto').value = Object.entries(estado.mapaSetores)
+    .map(([raiz,setor])=>`${raiz}=${setor}`).join('\n');
 }
 
 document.getElementById('btnSalvarListas').addEventListener('click', ()=>{
@@ -1903,6 +2012,30 @@ document.getElementById('btnSalvarListas').addEventListener('click', ()=>{
   estado.config.pisoLiquidezDiaria = parseFloat(document.getElementById('pisoLiquidez').value) || 0;
   salvarEstado();
   alert('Listas e piso de liquidez salvos. Reimporte o CSV para aplicar às novas exclusões.');
+});
+
+document.getElementById('btnSalvarMapaSetores').addEventListener('click', ()=>{
+  const texto = document.getElementById('mapaSetoresTexto').value;
+  const novoMapa = {};
+  let ignoradas = 0;
+  for(const linhaBruta of texto.split('\n')){
+    const linha = linhaBruta.trim();
+    if(!linha) continue;
+    const idx = linha.indexOf('=');
+    if(idx<0){ ignoradas++; continue; }
+    const raiz = linha.slice(0,idx).trim().toUpperCase();
+    const setor = linha.slice(idx+1).trim();
+    if(!raiz || !setor){ ignoradas++; continue; }
+    novoMapa[raiz] = setor;
+  }
+  estado.mapaSetores = novoMapa;
+  salvarEstado();
+  if(ultimoRanking) renderBlocoRanking(ultimoRanking);
+  alert(`Mapa de setores salvo: ${Object.keys(novoMapa).length} ticker(es).` + (ignoradas>0?` ${ignoradas} linha(s) ignorada(s) por formato inválido.`:''));
+});
+
+document.getElementById('chkDestacarMelhorSetor').addEventListener('change', ()=>{
+  if(ultimoRanking) renderBlocoRanking(ultimoRanking);
 });
 
 document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
@@ -1962,18 +2095,35 @@ function renderBlocoRanking(r){
   const detidos = tickersDetidos(); // raiz -> ticker detido
   // linhas no formato que precoCruzamentoTopN espera (mesma forma de um snapshot)
   const linhasParaSimulacao = r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, preco:c.preco }));
+
+  // Melhor (menor soma) por setor, considerando só quem está dentro do topN
+  // — é o que o destaque visual usa. Cálculo puramente informativo: nunca
+  // remove linha, nunca muda a soma de ninguém.
+  const melhorSomaPorSetor = {};
+  for(const c of r.candidatos){
+    if(c.posicao > topN) continue;
+    const setor = setorDoTicker(c.ticker);
+    if(!setor) continue;
+    if(!(setor in melhorSomaPorSetor) || c.soma < melhorSomaPorSetor[setor]) melhorSomaPorSetor[setor] = c.soma;
+  }
+  const destacarMelhorSetor = document.getElementById('chkDestacarMelhorSetor').checked;
+
   const tbody = document.querySelector('#tabelaRanking tbody');
   tbody.innerHTML = '';
   for(const c of r.candidatos){
     const dentroTopN = c.posicao <= topN;
     const raiz = raizTicker(c.ticker);
     const jaDetido = detidos[raiz];
+    const setor = setorDoTicker(c.ticker);
+    const ehMelhorDoSetor = setor && melhorSomaPorSetor[setor]===c.soma;
     const tr = document.createElement('tr');
     if(!dentroTopN) tr.style.opacity = '0.4';
     if(dentroTopN && !jaDetido) tr.style.fontWeight = '600';
+    if(destacarMelhorSetor && dentroTopN && setor && !ehMelhorDoSetor) tr.style.opacity = '0.35';
     tr.innerHTML = `
       <td class="num">${c.posicao}</td>
       <td>${c.ticker}</td>
+      <td>${setor || '<span class="nota">?</span>'}${dentroTopN && setor && ehMelhorDoSetor ? ' <span class="tag completa">melhor do setor</span>' : ''}</td>
       <td>${jaDetido ? '<span class="tag completa">detida ('+jaDetido+')</span>' : ''}</td>
       <td class="num">${c.fator1.toFixed(2)}</td>
       <td class="num">${fmtPct(c.fator2/100,1)}</td>
