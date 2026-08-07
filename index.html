@@ -2963,6 +2963,14 @@ function renderContexto(){
 
 const CHAVE_URL = 'carteiraFormulaMagica_url';
 const CHAVE_PENDENTE = 'carteiraFormulaMagica_pendente';
+// Timestamp (campo "atualizadoEm" devolvido pelo Apps Script) da última vez
+// que ESTE aparelho confirmou saber o que está na planilha — seja por ter
+// baixado, seja por ter enviado com sucesso. É o que permite detectar
+// conflito: se ao reabrir o app este aparelho tem pendência E o timestamp
+// da planilha não bate mais com o que guardamos aqui, alguém mudou a
+// planilha por outro caminho enquanto estávamos com alteração local não
+// confirmada — não dá para simplesmente empurrar por cima.
+const CHAVE_ULTIMO_GRAVADOEM = 'carteiraFormulaMagica_ultimoGravadoEm';
 let timerEnvio = null;
 
 function obterUrlConexao(){
@@ -2976,6 +2984,12 @@ function haPendencia(){
 }
 function definirPendencia(v){
   try{ localStorage.setItem(CHAVE_PENDENTE, v ? '1' : '0'); }catch(e){}
+}
+function obterUltimoGravadoEm(){
+  try{ return localStorage.getItem(CHAVE_ULTIMO_GRAVADOEM) || null; }catch(e){ return null; }
+}
+function definirUltimoGravadoEm(v){
+  try{ if(v) localStorage.setItem(CHAVE_ULTIMO_GRAVADOEM, v); }catch(e){}
 }
 
 function indicadorSinc(estadoCor, texto){
@@ -3010,6 +3024,23 @@ function salvarLocal(){
   }
 }
 
+// Aplica um estado vindo da planilha ao aparelho local. Extraído como
+// função própria porque agora tem DOIS chamadores: o fluxo normal de
+// download, e o fluxo de conflito quando o usuário escolhe descartar as
+// alterações locais em favor do que está na planilha.
+function aplicarEstadoRemoto(estadoRemoto){
+  const padrao = estadoPadrao();
+  estado = Object.assign({}, padrao, estadoRemoto);
+  estado.config = Object.assign({}, padrao.config, estadoRemoto.config||{});
+  estado.listasFiltro = Object.assign({}, padrao.listasFiltro, estadoRemoto.listasFiltro||{});
+  estado.mapaTitulos = estadoRemoto.mapaTitulos || {};
+  estado.mapaSetores = Object.assign({}, padrao.mapaSetores, estadoRemoto.mapaSetores||{});
+  estado.snapshotsRanking = estadoRemoto.snapshotsRanking || [];
+  recalcularCaixa();   // nunca confiar cegamente no caixa vindo de fora
+  salvarLocal();
+  popularListasFiltro();
+}
+
 async function enviarEstado(){
   const url = obterUrlConexao();
   if(!url) return false;
@@ -3029,6 +3060,7 @@ async function enviarEstado(){
     if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
 
     definirPendencia(false);
+    definirUltimoGravadoEm(resp.gravadoEm);
     indicadorSinc('ok','salvo');
     bannerSinc('');
     return true;
@@ -3043,46 +3075,72 @@ async function baixarEstado(){
   const url = obterUrlConexao();
   if(!url) return false;
 
-  // Se este aparelho tem alteração ainda não confirmada, baixar apagaria.
-  // Nesse caso envia em vez de baixar.
+  indicadorSinc('busy','sincronizando');
+  let resp;
+  try{
+    const r = await fetch(url, { method:'GET', redirect:'follow' });
+    if(!r.ok) throw new Error('http '+r.status);
+    resp = await r.json();
+    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
+  }catch(e){
+    indicadorSinc('err', haPendencia() ? 'não salvo na nuvem' : 'offline');
+    bannerSinc('Sem conexão com a planilha ('+e.message+'). Mostrando a última versão salva neste aparelho. '+
+      (haPendencia() ? 'Suas mudanças serão reenviadas quando a conexão voltar.' : 'Tenta de novo quando a conexão voltar.'));
+    render();
+    return false;
+  }
+
   if(haPendencia()){
+    // Este aparelho tem alteração local não confirmada. Antes de simplesmente
+    // empurrar por cima (comportamento antigo, causou o bug de 07/08/2026:
+    // um reset feito no PC foi sobrescrito por uma pendência velha do
+    // celular), confere se a planilha mudou desde a última vez que ESTE
+    // aparelho confirmou sincronização.
+    const gravadoRemoto = resp.atualizadoEm || null;
+    const ultimoConhecido = obterUltimoGravadoEm();
+    const houveMudancaPorFora = !resp.vazio && gravadoRemoto && ultimoConhecido && gravadoRemoto !== ultimoConhecido;
+
+    if(houveMudancaPorFora){
+      const manterLocal = confirm(
+        'A planilha foi alterada por outro aparelho (ou uma ação como resetar os dados) desde a última vez ' +
+        'que ESTE aparelho confirmou sincronização — e este aparelho também tem alterações não enviadas.\n\n' +
+        'OK = manter as alterações deste aparelho e sobrescrever a planilha com elas.\n' +
+        'Cancelar = descartar as alterações deste aparelho e usar o que está na planilha.'
+      );
+      if(manterLocal){
+        await enviarEstado();
+      } else {
+        definirPendencia(false);
+        if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
+          aplicarEstadoRemoto(resp.estado);
+          definirUltimoGravadoEm(gravadoRemoto);
+        }
+      }
+      indicadorSinc(manterLocal?'ok':'ok', manterLocal?'salvo':'sincronizado');
+      render();
+      return true;
+    }
+
+    // Sem conflito detectável (planilha não mudou, ou é a primeira sincronização
+    // deste aparelho e não há como comparar) — comportamento original: envia.
     await enviarEstado();
     render();
     return true;
   }
 
-  indicadorSinc('busy','sincronizando');
-  try{
-    const r = await fetch(url, { method:'GET', redirect:'follow' });
-    if(!r.ok) throw new Error('http '+r.status);
-    const resp = await r.json();
-    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
-
-    if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
-      const padrao = estadoPadrao();
-      estado = Object.assign({}, padrao, resp.estado);
-      estado.config = Object.assign({}, padrao.config, resp.estado.config||{});
-      estado.listasFiltro = Object.assign({}, padrao.listasFiltro, resp.estado.listasFiltro||{});
-      estado.mapaTitulos = resp.estado.mapaTitulos || {};
-      estado.snapshotsRanking = resp.estado.snapshotsRanking || [];
-      recalcularCaixa();   // nunca confiar cegamente no caixa vindo de fora
-      salvarLocal();
-    } else if(resp.vazio){
-      // primeira vez: a planilha ainda não tem nada. Sobe o que houver local.
-      await enviarEstado();
-    }
-
-    indicadorSinc('ok', resp.recuperadoDoBackup ? 'sincronizado (recuperado do backup)' : 'sincronizado');
-    bannerSinc(resp.recuperadoDoBackup ? 'A célula principal estava ilegível e os dados foram recuperados do backup automático da versão anterior.' : '');
-    popularListasFiltro();
-    render();
-    return true;
-  }catch(e){
-    indicadorSinc('err','offline');
-    bannerSinc('Sem conexão com a planilha ('+e.message+'). Mostrando a última versão salva neste aparelho. As mudanças sincronizam quando a conexão voltar.');
-    render();
-    return false;
+  // Sem pendência: fluxo normal de download.
+  if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
+    aplicarEstadoRemoto(resp.estado);
+  } else if(resp.vazio){
+    // primeira vez: a planilha ainda não tem nada. Sobe o que houver local.
+    await enviarEstado();
   }
+  if(resp.atualizadoEm) definirUltimoGravadoEm(resp.atualizadoEm);
+
+  indicadorSinc('ok', resp.recuperadoDoBackup ? 'sincronizado (recuperado do backup)' : 'sincronizado');
+  bannerSinc(resp.recuperadoDoBackup ? 'A célula principal estava ilegível e os dados foram recuperados do backup automático da versão anterior.' : '');
+  render();
+  return true;
 }
 
 async function sincronizarCotacoes(silencioso){
