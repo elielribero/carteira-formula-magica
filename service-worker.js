@@ -6,7 +6,7 @@
 // Subir uma nova versão do app: mude CACHE_NAME (ex.: 'carteira-fm-v2').
 // Isso invalida o cache antigo automaticamente no próximo carregamento online.
 
-const CACHE_NAME = 'carteira-fm-v9';
+const CACHE_NAME = 'carteira-fm-v10';
 const ARQUIVOS_ESSENCIAIS = [
   './',
   './index.html',
@@ -36,6 +36,21 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+  const mesmaOrigem = url.origin === self.location.origin;
+
+  // NUNCA cachear chamadas de origem cruzada (a API do Apps Script). São
+  // dado vivo e mutável — a sincronização com a planilha. Bug real corrigido
+  // em 07/08/2026: sem esta checagem, o cache-first abaixo respondia com uma
+  // cópia velha da sincronização em vez de buscar de novo na rede, então um
+  // reset feito na planilha não aparecia depois de atualizar a página — o
+  // app mostrava dados de antes do reset, indefinidamente, até o cache
+  // expirar ou ser limpo manualmente. Só o app shell (arquivos deste próprio
+  // domínio) deve passar pela lógica de cache abaixo.
+  if (!mesmaOrigem) {
+    return; // deixa o navegador buscar na rede normalmente, sem passar pelo SW
+  }
 
   const isNavegacao = req.mode === 'navigate';
 
