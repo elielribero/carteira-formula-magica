@@ -598,7 +598,7 @@ function estadoPadrao(){
       // localStorage: ela é por aparelho e não deve viajar dentro do estado
       // que é gravado na planilha (senão um aparelho sobrescreveria o outro).
 
-      dataVerificacaoParametrosFiscais: ''
+      dataVerificacaoParametrosFiscais: '2026-08-07'
     },
     // Listas editáveis do filtro do Módulo 2 (memorial, seção 5.1).
     // Lista inicial de financeiras verificada em 04/08/2026.
@@ -664,6 +664,18 @@ function carregarEstado(){
     obj.mapaTitulos = obj.mapaTitulos || {};
     obj.mapaSetores = Object.assign({}, padrao.mapaSetores, obj.mapaSetores||{});
     obj.snapshotsRanking = obj.snapshotsRanking || [];
+    // Poda de estados criados antes da limitação de 07/08/2026, que podiam
+    // guardar 164 linhas por snapshot e histórico ilimitado — isso estourava
+    // o limite de 50 mil caracteres da célula da planilha em poucos meses.
+    if(obj.snapshotsRanking.length > 3) obj.snapshotsRanking = obj.snapshotsRanking.slice(-3);
+    for(const snap of obj.snapshotsRanking){
+      if(snap && Array.isArray(snap.linhas) && snap.linhas.length > 90){
+        // Mesma regra do snapshot novo: topo íntegro + amostra da cauda.
+        // Cortar só os primeiros destruiria a faixa de EV/EBIT alto que a
+        // simulação de preço-teto precisa para achar o cruzamento.
+        snap.linhas = snap.linhas.filter((l,i)=> i < 60 || (i-60) % 3 === 0);
+      }
+    }
     return obj;
   }catch(e){
     console.error('Falha ao carregar estado local:', e);
@@ -1649,13 +1661,34 @@ function renderConfig(){
   for(const [chave,rotulo] of campos){
     const linha = document.createElement('div');
     linha.className='config-linha';
-    linha.innerHTML = `<label>${rotulo}</label><input type="number" step="any" data-config="${chave}" value="${estado.config[chave]}">
-      <span class="verif">verificado 04/08/2026</span>`;
+    linha.innerHTML = `<label>${rotulo}</label><input type="number" step="any" data-config="${chave}" value="${estado.config[chave]}">`;
     cont.appendChild(linha);
   }
+
+  // Data de verificação dos parâmetros fiscais — campo de data, não numérico.
+  // O selo "verificado 04/08/2026" que existia aqui estava FIXO NO CÓDIGO e
+  // se repetia em todos os parâmetros, afirmando verificação inclusive para
+  // valores que o usuário alterou depois (apontado em parecer externo,
+  // 07/08/2026). Removido: agora só existe esta data, que é editável e
+  // efetivamente usada pelo aviso do painel de limite mensal.
+  const linhaData = document.createElement('div');
+  linhaData.className='config-linha';
+  linhaData.innerHTML = `<label>Parâmetros fiscais conferidos em</label>
+    <input type="date" data-config-data="dataVerificacaoParametrosFiscais" value="${estado.config.dataVerificacaoParametrosFiscais||''}">`;
+  cont.appendChild(linhaData);
+
   cont.querySelectorAll('[data-config]').forEach(inp=>{
     inp.addEventListener('change', ()=>{
-      estado.config[inp.dataset.config] = parseFloat(inp.value);
+      const v = parseFloat(inp.value);
+      if(!isFinite(v)){ alert('Valor inválido; a alteração foi descartada.'); renderConfig(); return; }
+      estado.config[inp.dataset.config] = v;
+      salvarEstado();
+      render();
+    });
+  });
+  cont.querySelectorAll('[data-config-data]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      estado.config[inp.dataset.configData] = inp.value;
       salvarEstado();
       render();
     });
@@ -2048,11 +2081,56 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
     if(!r.ok){ divResultado.innerHTML = `<div class="alerta critico">${r.msg}</div>`; document.getElementById('blocoRanking').classList.add('oculto'); return; }
 
     ultimoRanking = r;
+
+    // Snapshot enxuto: guarda o topo do ranking mais uma AMOSTRA DA CAUDA.
+    // MEDIDO em 07/08/2026: um snapshot completo (164 linhas) ocupava ~15 mil
+    // caracteres, e como o estado inteiro vive numa célula (limite 50 mil),
+    // cabiam só DUAS importações antes de a gravação ser recusada. O parecer
+    // externo classificou como P0 e estava certo — eu havia estimado "anos"
+    // por suposição, sem medir.
+    //
+    // A amostra da cauda NÃO é opcional: a simulação de preço-teto reprecifica
+    // o papel e recalcula o ranking inteiro procurando onde ele cruza o topN.
+    // Cortando só os primeiros, sumiam os candidatos de EV/EBIT alto que
+    // empurram o papel para fora — nem preço estratosférico produzia
+    // cruzamento, e o preço-teto virava "—" (regressão pega em teste).
+    // Guardando 1 a cada N da cauda, a faixa de EV/EBIT continua representada
+    // com uma fração do custo.
+    const LIMITE_TOPO = Math.max(estado.config.topN * 2, 60);
+    // Passo 3, escolhido por MEDIÇÃO do erro do preço-teto contra o ranking
+    // completo: passo 6 dava erro médio de 4,6% mas com pior caso de 25%
+    // (RIAA3) — grande demais para um número exibido como referência de
+    // preço. Passo 3 baixa para 1,9% médio e 6% no pior caso, custando 17
+    // linhas a mais por snapshot. Passo 2 não melhora (2,4%).
+    const PASSO_CAUDA = 3;
+    const detidosRaiz = new Set(Object.keys(tickersDetidos()));
+    const linhasSnapshot = r.candidatos
+      .filter((c,i) =>
+        i < LIMITE_TOPO ||                                  // topo íntegro
+        (i - LIMITE_TOPO) % PASSO_CAUDA === 0 ||            // amostra da cauda
+        detidosRaiz.has(raizTicker(c.ticker))               // nunca perder papel detido
+      )
+      .map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade }));
+
     estado.snapshotsRanking.push({
       data: hoje(), origem: 'statusinvest',
       criterio: r.criterio,
-      linhas: r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade }))
+      topN: estado.config.topN,          // o topN VIGENTE na importação
+      totalCandidatos: r.candidatos.length,
+      linhas: linhasSnapshot
     });
+
+    // Retenção: apenas os 3 mais recentes. MEDIDO: cada snapshot custa ~5,5
+    // mil caracteres (60 linhas com os campos que o preço-teto e a aba
+    // Contexto precisam). Reter 12 estouraria o limite da célula em ~7 meses;
+    // reter 3 mantém o estado em ~16 mil, com folga permanente e sem
+    // degradar nada — nenhuma tela lê snapshot antigo, só o mais recente.
+    // Cortar campos foi descartado: `preco` e `evEbit` são exatamente o que
+    // a simulação de preço-teto consome.
+    const MAX_SNAPSHOTS = 3;
+    if(estado.snapshotsRanking.length > MAX_SNAPSHOTS){
+      estado.snapshotsRanking = estado.snapshotsRanking.slice(-MAX_SNAPSHOTS);
+    }
     salvarEstado();
 
     const totalExcluidos = Object.values(r.excluidos).reduce((s,arr)=>s+arr.length,0);
@@ -2152,7 +2230,12 @@ function renderBlocoRanking(r){
 
 document.getElementById('btnAplicarElegibilidade').addEventListener('click', ()=>{
   if(!ultimoRanking){ alert('Importe um CSV primeiro nesta sessão.'); return; }
-  const topN = estado.config.topN;
+  // Usa o topN VIGENTE NA IMPORTAÇÃO deste ranking, não o que estiver na
+  // configuração agora (apontado em parecer externo, 07/08/2026): se o
+  // usuário importa com topN=30 e depois muda para 25, aplicar o 25 novo a
+  // um ranking calculado com 30 mistura dois critérios distintos.
+  const snapshotAtual = ultimoSnapshotRanking();
+  const topN = (snapshotAtual && snapshotAtual.topN) ? snapshotAtual.topN : estado.config.topN;
   const raizesElegiveis = new Set(ultimoRanking.candidatos.filter(c=>c.posicao<=topN).map(c=>raizTicker(c.ticker)));
 
   let alterados = 0;
@@ -2470,8 +2553,14 @@ function renderCalendario(){
     <p class="nota">
       O limite incide sobre o total vendido no mês, não sobre o lucro. Acima dele, o ganho
       é tributado à alíquota configurada (${fmtPct(estado.config.aliquotaGanho,0)}).
-      Parâmetro verificado em 04/08/2026 — há Medida Provisória em tramitação que pode
-      alterar isso; reconferir a cada semestre.
+      ${(()=>{
+        const d = estado.config.dataVerificacaoParametrosFiscais;
+        const meses = d ? mesesEntre(d, hoje()) : null;
+        const vencido = meses!==null && meses >= 6;
+        return (d ? `Parâmetros conferidos na Receita Federal em ${fmtData(d)}.` : 'Parâmetros nunca conferidos nesta instalação.')
+          + ' A MP 1.303/2025, que propunha extinguir esta isenção, <b>caducou em 08/10/2025</b> sem ser votada — as regras anteriores seguem valendo.'
+          + (vencido ? ` <b>Última conferência há ${meses} meses</b> — regra tributária muda por lei nova a qualquer tempo; reconfira em fonte oficial e atualize a data em Configuração.` : ' Reconfira em fonte oficial antes de vender.');
+      })()}
     </p>`;
 
   const calc = todasPosicoesCalculadas()
