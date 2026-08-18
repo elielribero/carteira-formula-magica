@@ -554,7 +554,7 @@
     </p>
     <p class="nota" id="statusTamanhoEstado"></p>
     <div class="rodape-acoes">
-      <button class="acao secundario" id="btnLimparSnapshots">Limpar histórico de ranking agora</button>
+      <button class="acao secundario" id="btnLimparSnapshots">Liberar espaço (limpar dados descartáveis)</button>
     </div>
 
     <h2>Backup local</h2>
@@ -700,43 +700,73 @@ let estadoAnterior = null; // para desfazer (spec 5.6)
 // bastar — e como nunca media, não tinha como saber que ainda estava grande
 // demais. Reescrita para MEDIR o tamanho serializado de verdade e reduzir em
 // passos até caber no orçamento, em vez de confiar numa fórmula única.
-function podarSnapshotsRanking(obj){
-  if(!obj || !Array.isArray(obj.snapshotsRanking)) return obj;
+function podarEstado(obj){
+  if(!obj) return obj;
 
   function tamanhoAtual(){
     try{ return JSON.stringify(obj).length; }catch(e){ return 0; }
   }
 
-  // Passo 1: nunca mais que 3 snapshots, de saída.
-  if(obj.snapshotsRanking.length > 3) obj.snapshotsRanking = obj.snapshotsRanking.slice(-3);
-
-  // Passo 2: se ainda estiver grande, aperta a amostra da cauda de cada
-  // snapshot progressivamente (passo 3 -> 5 -> 8 -> só o topo) até caber ou
-  // esgotar as opções.
-  const passosCauda = [3, 5, 8, Infinity];   // Infinity = só o topo, sem cauda
-  for(const passo of passosCauda){
-    if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
-    for(const snap of obj.snapshotsRanking){
-      if(!snap || !Array.isArray(snap.linhas)) continue;
-      snap.linhas = snap.linhas.filter((l,i)=> i < 60 || (passo!==Infinity && (i-60) % passo === 0));
+  // ---- PASSO 0: podar `precos` (a maior causa de estouro, medido 18/08/2026) ----
+  // `precos` guardava uma entrada para CADA ticker que já passou por qualquer
+  // importação — 600+ empresas de um CSV completo. Mas só interessa o preço
+  // de quem está na carteira ou aparece no snapshot de ranking mais recente
+  // (o preço-teto usa esses). O resto é descartável: regenera sozinho na
+  // próxima importação de preços. Sem esta poda, uma única importação de
+  // preços de um CSV grande enchia ~46 mil dos 50 mil caracteres da célula.
+  if(obj.precos && typeof obj.precos === 'object'){
+    const manter = new Set();
+    // raízes e tickers detidos (posições não encerradas)
+    if(Array.isArray(obj.posicoes)){
+      for(const p of obj.posicoes){
+        if(p && p.ticker && p.status !== 'encerrada'){
+          manter.add(p.ticker.toUpperCase());
+          manter.add(p.ticker.toUpperCase().replace(/\d+$/,'')); // raiz
+        }
+      }
     }
+    // tickers do snapshot de ranking mais recente (preço-teto depende deles)
+    if(Array.isArray(obj.snapshotsRanking) && obj.snapshotsRanking.length){
+      const ultimo = obj.snapshotsRanking[obj.snapshotsRanking.length-1];
+      if(ultimo && Array.isArray(ultimo.linhas)){
+        for(const l of ultimo.linhas){ if(l && l.ticker) manter.add(l.ticker.toUpperCase()); }
+      }
+    }
+    // reconstrói precos só com o que interessa (casa por ticker exato ou raiz)
+    const novo = {};
+    for(const [tk, info] of Object.entries(obj.precos)){
+      const T = tk.toUpperCase();
+      if(manter.has(T) || manter.has(T.replace(/\d+$/,''))) novo[tk] = info;
+    }
+    obj.precos = novo;
   }
 
-  // Passo 3: ainda grande? reduz para os 2, depois 1 snapshots mais recentes.
-  for(const manter of [2, 1]){
-    if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
-    obj.snapshotsRanking = obj.snapshotsRanking.slice(-manter);
-  }
+  // ---- PASSO 1: snapshots de ranking ----
+  if(Array.isArray(obj.snapshotsRanking)){
+    if(obj.snapshotsRanking.length > 3) obj.snapshotsRanking = obj.snapshotsRanking.slice(-3);
 
-  // Último recurso: nem com 1 snapshot mínimo coube (estado muito grande por
-  // outro motivo — posições, lotes, proventos). Não tem mais o que cortar
-  // aqui com segurança; zera snapshots e deixa o resto do estado intacto.
-  if(tamanhoAtual() > ORCAMENTO_ESTADO && obj.snapshotsRanking.length > 0){
-    obj.snapshotsRanking = [];
+    const passosCauda = [3, 5, 8, Infinity];   // Infinity = só o topo, sem cauda
+    for(const passo of passosCauda){
+      if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
+      for(const snap of obj.snapshotsRanking){
+        if(!snap || !Array.isArray(snap.linhas)) continue;
+        snap.linhas = snap.linhas.filter((l,i)=> i < 60 || (passo!==Infinity && (i-60) % passo === 0));
+      }
+    }
+    for(const manter of [2, 1]){
+      if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
+      obj.snapshotsRanking = obj.snapshotsRanking.slice(-manter);
+    }
+    if(tamanhoAtual() > ORCAMENTO_ESTADO && obj.snapshotsRanking.length > 0){
+      obj.snapshotsRanking = [];
+    }
   }
 
   return obj;
 }
+
+// Compatibilidade: o nome antigo ainda é chamado em alguns pontos.
+function podarSnapshotsRanking(obj){ return podarEstado(obj); }
 
 function carregarEstado(){
   try{
@@ -755,7 +785,16 @@ function carregarEstado(){
     obj.mapaTitulos = obj.mapaTitulos || {};
     obj.mapaSetores = Object.assign({}, padrao.mapaSetores, obj.mapaSetores||{});
     obj.snapshotsRanking = obj.snapshotsRanking || [];
-    return podarSnapshotsRanking(obj);
+    const tamAntes = bruto.length;
+    podarEstado(obj);
+    // Se a poda reduziu algo, regrava já — senão a limpeza só existe em
+    // memória e o estado incha de novo no próximo boot (bug pego em teste,
+    // 18/08/2026). O envio à planilha continua acontecendo pelo fluxo normal.
+    try{
+      const depois = JSON.stringify(obj);
+      if(depois.length < tamAntes) localStorage.setItem(CHAVE_STORAGE, depois);
+    }catch(e){ console.error(e); }
+    return obj;
   }catch(e){
     console.error('Falha ao carregar estado local:', e);
     return estadoPadrao();
@@ -1859,13 +1898,39 @@ function renderStatusTamanhoEstado(){
 }
 
 document.getElementById('btnLimparSnapshots').addEventListener('click', ()=>{
-  const n = estado.snapshotsRanking.length;
-  if(n===0){ alert('Não há histórico de ranking para limpar.'); return; }
-  if(!confirm(`Isso apaga ${n} snapshot(s) de ranking guardados (posição, EV/EBIT, ROIC, qualidade de cada importação passada). Preço-teto e a aba Contexto ficam sem dado até a próxima importação de ranking. Suas posições, lançamentos e caixa NÃO são afetados. Confirma?`)) return;
+  const nSnap = estado.snapshotsRanking.length;
+  const nPrecos = Object.keys(estado.precos||{}).length;
+  const tamAntes = JSON.stringify(estado).length;
+
+  // Quantos preços seriam mantidos (detidos + snapshot atual)?
+  const detidos = new Set();
+  for(const p of estado.posicoes){
+    if(p.status!=='encerrada'){ detidos.add(p.ticker.toUpperCase()); detidos.add(raizTicker(p.ticker.toUpperCase())); }
+  }
+  const nMantidos = Object.keys(estado.precos||{}).filter(tk=>{
+    const T = tk.toUpperCase();
+    return detidos.has(T) || detidos.has(raizTicker(T));
+  }).length;
+  const nDescartaveis = nPrecos - nMantidos;
+
+  if(nSnap===0 && nDescartaveis<=0){
+    alert(`Nada a limpar: ${nSnap} snapshot(s) de ranking e ${nPrecos} preço(s), todos de ativos que você tem em carteira.`);
+    return;
+  }
+  if(!confirm(
+    `Isso libera espaço removendo:\n` +
+    `• ${nSnap} snapshot(s) de histórico de ranking\n` +
+    `• ${nDescartaveis} preço(s) de ativos que você NÃO tem em carteira (mantém os ${nMantidos} das suas posições)\n\n` +
+    `Tudo isso regenera sozinho na próxima importação de ranking/preços. ` +
+    `Suas posições, lançamentos e caixa NÃO são afetados. Confirma?`
+  )) return;
+
   estado.snapshotsRanking = [];
+  podarEstado(estado);   // remove os preços descartáveis
   salvarEstado();
   renderStatusTamanhoEstado();
-  alert('Histórico de ranking limpo. Importe um novo CSV na aba Ranking quando quiser.');
+  const tamDepois = JSON.stringify(estado).length;
+  alert(`Limpo. Tamanho do estado: ${tamAntes.toLocaleString('pt-BR')} → ${tamDepois.toLocaleString('pt-BR')} caracteres.`);
 });
 
 /* ==========================================================================
@@ -3370,6 +3435,13 @@ async function enviarEstado(){
   const url = obterUrlConexao();
   if(!url) return false;
   indicadorSinc('busy','salvando');
+  // Poda antes de serializar: remove preços de tickers que não são detidos
+  // nem estão no snapshot de ranking atual (regeneram na próxima importação).
+  // É a correção da causa real do estouro de 18/08/2026 — a seção `precos`
+  // acumulava 600+ tickers e ocupava 96% do estado. Poda o próprio `estado`
+  // em memória: o que sai é descartável e volta sozinho quando preciso.
+  podarEstado(estado);
+  salvarLocal();
   try{
     const r = await fetch(url, {
       method:'POST',
