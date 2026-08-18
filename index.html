@@ -114,7 +114,7 @@
      inteira só para esconder uma célula. */
   #tabelaRanking.oculta-setor [data-col="setor"],
   #tabelaRanking.oculta-carteira [data-col="carteira"],
-  #tabelaRanking.oculta-teto [data-col="teto"],
+  #tabelaRanking.oculta-graham [data-col="graham"],
   #tabelaRanking.oculta-cotacao [data-col="cotacao"],
   #tabelaRanking.oculta-mm50 [data-col="mm50"],
   #tabelaRanking.oculta-mm200 [data-col="mm200"],
@@ -248,6 +248,11 @@
         são <b>informação para apoiar a decisão, não filtro</b>: nada aqui exclui um papel do ranking nem muda a
         soma. Qualidade é um escore parcial (X de Y critérios verificáveis na fonte — colunas ausentes aparecem como "sem dado", não como reprovado): ROA, margem EBIT e crescimento de receita positivos, liquidez
         corrente acima de 1, dívida líquida/patrimônio dentro do teto configurado — passe o mouse para ver o detalhe.
+        Preço Justo (Graham) = √(22,5 × LPA × VPA), com a margem entre parênteses (positiva = cotação abaixo do
+        justo, a favor da compra). É uma <b>segunda lente de preço, informativa</b> — não substitui o EV/EBIT do
+        método nem entra na soma. Fica em branco quando a empresa teve prejuízo ou patrimônio negativo (a fórmula
+        não se aplica). Lembre que Graham supervaloriza o patrimônio, o que subestima o preço justo de empresas de
+        serviços e tecnologia com poucos ativos.
       </p>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <input type="checkbox" id="chkDestacarMelhorSetor" style="width:auto">
@@ -258,7 +263,7 @@
       <div id="controlesColunaRanking" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12px"></div>
       <div class="tabela-scroll">
         <table id="tabelaRanking"><thead><tr>
-          <th>#</th><th>Ticker</th><th data-col="setor">Setor</th><th data-col="carteira">Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th data-col="teto">Preço-teto/entrada*</th><th data-col="cotacao">Cotação</th><th data-col="mm50">MM50</th><th data-col="mm200">MM200</th><th data-col="qualidade">Qualidade*</th>
+          <th>#</th><th>Ticker</th><th data-col="setor">Setor</th><th data-col="carteira">Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th data-col="graham">Preço Justo (Graham)*</th><th data-col="cotacao">Cotação</th><th data-col="mm50">MM50</th><th data-col="mm200">MM200</th><th data-col="qualidade">Qualidade*</th>
         </tr></thead><tbody></tbody></table>
       </div>
 
@@ -1154,6 +1159,12 @@ function numBR(s){
   if(s===undefined||s===null) return null;
   s = String(s).trim();
   if(s==='' || /^#/.test(s)) return null;
+  // Remove "R$" e espaços (várias colunas do oceans14 vêm como "R$ 7,21",
+  // "-R$ 0,40"). O sinal de menos, se houver, precisa sobreviver — então
+  // tiro só o "r$" e espaços, preservando o resto. Achado em 18/08/2026:
+  // sem isso, LPA/VPA do oceans14 viravam null e o Preço Justo de Graham
+  // não calculava para nenhuma empresa dessa fonte.
+  s = s.replace(/r\$/ig, '').replace(/\s/g, '');
   s = s.replace(/\./g,'').replace(',', '.');
   const v = parseFloat(s);
   return isNaN(v) ? null : v;
@@ -1342,6 +1353,9 @@ function processarRanking(texto, criterio){
   const iLiqCorr   = localizarColuna(cab, ['liq. corrente','liquidez corrente','liq corrente']);
   const iDivPatri  = localizarColuna(cab, ['div. liq./ patri','div liq patri','divida liquida/patrimonio','dív. líq./patri']);
   const iCagrRec   = localizarColuna(cab, ['cagr receitas 5 anos','cresc. rec.5a','crescimento da receita','cresc. receita','cresc receita']);
+  // LPA para o Preço Justo de Graham (VPA já é lido acima, em iVpa, para o
+  // filtro de patrimônio negativo — reaproveitado aqui)
+  const iLpa       = localizarColuna(cab, ['lpa']);
 
   if(iTicker<0 || iEvEbit<0 || iRoic<0){
     return { ok:false, msg:'Não encontrei colunas de Ticker, EV/EBIT e ROIC no cabeçalho: '+cab.join(' | ') };
@@ -1420,7 +1434,18 @@ function processarRanking(texto, criterio){
     const escoreTotal = verificaveis.length;   // quantos critérios a fonte permite checar
     const escoreDetalhe = criterios.map(c=> c.verificavel ? `${c.ok?'✓':'✗'} ${c.nome}` : `— ${c.nome} (sem dado na fonte)`).join(' · ');
 
-    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv, escoreQualidade, escoreTotal, escoreDetalhe });
+    // Preço Justo de Graham = √(22,5 × LPA × VPA). Informativo, nunca filtra.
+    // Só é definido com LPA e VPA ambos positivos: LPA negativo é prejuízo,
+    // VPA negativo é patrimônio negativo — em qualquer dos dois a raiz seria
+    // de número negativo (indefinida). Nesses casos fica null e a coluna
+    // mostra "—". Também exige a coluna existir na fonte.
+    const lpa = iLpa>=0 ? numBR(l[iLpa]) : null;
+    let precoJustoGraham = null;
+    if(lpa!==null && vpa!==null && lpa>0 && vpa>0){
+      precoJustoGraham = Math.sqrt(22.5 * lpa * vpa);
+    }
+
+    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv, escoreQualidade, escoreTotal, escoreDetalhe, precoJustoGraham });
   }
 
   // deduplicação por raiz, mantendo a classe mais líquida (memorial 5.1, regra 8)
@@ -2342,7 +2367,7 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
         (i - LIMITE_TOPO) % PASSO_CAUDA === 0 ||            // amostra da cauda
         detidosRaiz.has(raizTicker(c.ticker))               // nunca perder papel detido
       )
-      .map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade, escoreTotal:c.escoreTotal }));
+      .map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade, escoreTotal:c.escoreTotal, precoJustoGraham:c.precoJustoGraham }));
 
     estado.snapshotsRanking.push({
       data: hoje(), origem: 'statusinvest',
@@ -2388,7 +2413,7 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
 // celular pode querer visão compacta e o PC, visão completa, sem um
 // sobrescrever a preferência do outro a cada sincronização).
 const COLUNAS_RANKING = [
-  ['setor','Setor'], ['carteira','Carteira'], ['teto','Preço-teto'],
+  ['setor','Setor'], ['carteira','Carteira'], ['graham','Preço Justo Graham'],
   ['cotacao','Cotação'], ['mm50','MM50'], ['mm200','MM200'], ['qualidade','Qualidade']
 ];
 const CHAVE_COLUNAS_RANKING = 'carteiraFormulaMagica_colunasRankingOcultas';
@@ -2453,8 +2478,6 @@ function renderBlocoRanking(r){
 
   // tabela de ranking
   const detidos = tickersDetidos(); // raiz -> ticker detido
-  // linhas no formato que precoCruzamentoTopN espera (mesma forma de um snapshot)
-  const linhasParaSimulacao = r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, preco:c.preco }));
 
   // Melhor (menor soma) por setor, considerando só quem está dentro do topN
   // — é o que o destaque visual usa. Cálculo puramente informativo: nunca
@@ -2489,10 +2512,17 @@ function renderBlocoRanking(r){
       <td class="num">${fmtPct(c.fator2/100,1)}</td>
       <td class="num">${c.soma}</td>
       <td class="num">${c.dy!==null?c.dy.toFixed(1)+'%':'—'}${c.dy!==null && c.dy>30?' <span class="badge-desl">alto</span>':''}</td>
-      <td class="num" data-col="teto">${(()=>{
-        if(c.preco===null || r.criterio==='pl_roe') return '—';
-        const cruz = precoCruzamentoTopN(linhasParaSimulacao, {ticker:c.ticker, evEbit:c.evEbit, preco:c.preco}, topN);
-        return cruz ? fmtMoeda(cruz.precoCruzamento) : '—';
+      <td class="num" data-col="graham">${(()=>{
+        if(c.precoJustoGraham===null) return '—';
+        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
+        const cot = (info && info.ultimoValido!==null && info.ultimoValido!==undefined) ? info.ultimoValido : c.preco;
+        let margem = '';
+        if(cot!==null && cot!==undefined && cot>0){
+          const m = (c.precoJustoGraham/cot - 1)*100;   // >0 = cotação abaixo do justo (margem a favor)
+          const cls = m>=0 ? 'pos' : 'neg';
+          margem = ` <span class="${cls}" style="font-size:11px">(${m>=0?'+':''}${m.toFixed(0)}%)</span>`;
+        }
+        return fmtMoeda(c.precoJustoGraham) + margem;
       })()}</td>
       <td class="num" data-col="cotacao">${(()=>{
         const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];

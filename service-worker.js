@@ -6,7 +6,7 @@
 // Subir uma nova versão do app: mude CACHE_NAME (ex.: 'carteira-fm-v2').
 // Isso invalida o cache antigo automaticamente no próximo carregamento online.
 
-const CACHE_NAME = 'carteira-fm-v15';
+const CACHE_NAME = 'carteira-fm-v16';
 const ARQUIVOS_ESSENCIAIS = [
   './',
   './index.html',
