@@ -109,6 +109,18 @@
   dialog h3{margin:0 0 10px;font-size:14px;letter-spacing:.05em;text-transform:uppercase}
   dialog .acoes{display:flex;gap:8px;margin-top:16px}
   .oculto{display:none !important}
+  /* Colunas opcionais do Ranking (17/08/2026): cada uma some por CSS quando
+     a tabela recebe a classe correspondente — evita reescrever a linha
+     inteira só para esconder uma célula. */
+  #tabelaRanking.oculta-setor [data-col="setor"],
+  #tabelaRanking.oculta-carteira [data-col="carteira"],
+  #tabelaRanking.oculta-teto [data-col="teto"],
+  #tabelaRanking.oculta-cotacao [data-col="cotacao"],
+  #tabelaRanking.oculta-mm50 [data-col="mm50"],
+  #tabelaRanking.oculta-mm200 [data-col="mm200"],
+  #tabelaRanking.oculta-qualidade [data-col="qualidade"]{ display:none }
+  .controle-coluna{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;color:var(--sub)}
+  .controle-coluna input{width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -234,7 +246,7 @@
         O corte de elegibilidade (<span id="topNLabel"></span>) está destacado; abaixo dele a linha aparece esmaecida.
         MM50/MM200 e Qualidade só aparecem se você configurou a sincronização de cotações com essas colunas —
         são <b>informação para apoiar a decisão, não filtro</b>: nada aqui exclui um papel do ranking nem muda a
-        soma. Qualidade é um escore parcial (0-5): ROA, margem EBIT e crescimento de receita positivos, liquidez
+        soma. Qualidade é um escore parcial (X de Y critérios verificáveis na fonte — colunas ausentes aparecem como "sem dado", não como reprovado): ROA, margem EBIT e crescimento de receita positivos, liquidez
         corrente acima de 1, dívida líquida/patrimônio dentro do teto configurado — passe o mouse para ver o detalhe.
       </p>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -243,9 +255,10 @@
           Destacar apenas a melhor posicionada de cada setor (só realce visual — nenhuma linha some, nenhum dado muda)
         </label>
       </div>
+      <div id="controlesColunaRanking" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12px"></div>
       <div class="tabela-scroll">
         <table id="tabelaRanking"><thead><tr>
-          <th>#</th><th>Ticker</th><th>Setor</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th><th>MM50</th><th>MM200</th><th>Qualidade*</th>
+          <th>#</th><th>Ticker</th><th data-col="setor">Setor</th><th data-col="carteira">Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th data-col="teto">Preço-teto/entrada*</th><th data-col="cotacao">Cotação</th><th data-col="mm50">MM50</th><th data-col="mm200">MM200</th><th data-col="qualidade">Qualidade*</th>
         </tr></thead><tbody></tbody></table>
       </div>
 
@@ -533,6 +546,17 @@
     </div>
     <div id="statusSincronizacao" style="margin-top:10px"></div>
 
+    <h2>Tamanho do estado sincronizado</h2>
+    <p class="nota">
+      Todo o estado vive numa única célula da planilha (limite operacional de 50.000 caracteres). O que mais
+      cresce é o histórico de ranking; a ferramenta poda automaticamente, mas se a mensagem de "gravação
+      recusada" persistir, use o botão abaixo para agir na hora, sem esperar a poda automática.
+    </p>
+    <p class="nota" id="statusTamanhoEstado"></p>
+    <div class="rodape-acoes">
+      <button class="acao secundario" id="btnLimparSnapshots">Limpar histórico de ranking agora</button>
+    </div>
+
     <h2>Backup local</h2>
     <p class="nota" id="statusBackup"></p>
     <div class="rodape-acoes">
@@ -578,6 +602,16 @@
 const CHAVE_STORAGE = 'carteiraFormulaMagica_v1';
 const CHAVE_BACKUP_DATA = 'carteiraFormulaMagica_ultimoBackup';
 const VERSAO_SCHEMA = 1;
+
+// Orçamento de tamanho do estado sincronizado (folga abaixo do limite duro
+// de 50.000 caracteres por célula). Precisa estar declarada AQUI, antes de
+// `let estado = carregarEstado()` mais abaixo — bug real encontrado em
+// teste (17/08/2026): a declaração original ficava perto de
+// podarSnapshotsRanking, mas essa função é chamada dentro de
+// carregarEstado(), que roda ANTES desse ponto do arquivo. `const` fica em
+// "zona morta temporal" até sua própria linha executar (diferente de
+// função, que é içada inteira) — resultado: ReferenceError ao abrir o app.
+const ORCAMENTO_ESTADO = 40000;
 
 function estadoPadrao(){
   return {
@@ -647,6 +681,63 @@ function estadoPadrao(){
 let estado = carregarEstado();
 let estadoAnterior = null; // para desfazer (spec 5.6)
 
+// Poda de snapshotsRanking — histórico de ranking mora numa única célula da
+// planilha (limite 50 mil caracteres, ver memorial 07/08/2026). Precisa
+// rodar em QUALQUER caminho que traga um `estado` de fora do processo atual,
+// não só no carregamento local: bug real corrigido em 07/08/2026 — esta
+// poda existia só em carregarEstado() (mirror local), mas a arquitetura usa
+// a planilha como fonte da verdade, então o caminho que roda quase sempre é
+// aplicarEstadoRemoto() (puxado da planilha), que copiava snapshotsRanking
+// sem podar nada. Resultado: o histórico crescia sem limite a cada
+// sincronização, até a gravação ser recusada por excesso de tamanho.
+// Poda de snapshotsRanking — histórico de ranking mora numa única célula da
+// planilha (limite 50 mil caracteres, ver memorial 07/08/2026).
+//
+// CORREÇÃO (17/08/2026): a versão anterior aplicava uma fórmula FIXA (corta
+// em 90 linhas, mantém topo de 60) sem nunca medir o resultado. Isso supõe
+// implicitamente topN≈30; com topN maior configurado, ou com mais posições/
+// lotes/proventos acumulados que no cenário testado, a fórmula podia não
+// bastar — e como nunca media, não tinha como saber que ainda estava grande
+// demais. Reescrita para MEDIR o tamanho serializado de verdade e reduzir em
+// passos até caber no orçamento, em vez de confiar numa fórmula única.
+function podarSnapshotsRanking(obj){
+  if(!obj || !Array.isArray(obj.snapshotsRanking)) return obj;
+
+  function tamanhoAtual(){
+    try{ return JSON.stringify(obj).length; }catch(e){ return 0; }
+  }
+
+  // Passo 1: nunca mais que 3 snapshots, de saída.
+  if(obj.snapshotsRanking.length > 3) obj.snapshotsRanking = obj.snapshotsRanking.slice(-3);
+
+  // Passo 2: se ainda estiver grande, aperta a amostra da cauda de cada
+  // snapshot progressivamente (passo 3 -> 5 -> 8 -> só o topo) até caber ou
+  // esgotar as opções.
+  const passosCauda = [3, 5, 8, Infinity];   // Infinity = só o topo, sem cauda
+  for(const passo of passosCauda){
+    if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
+    for(const snap of obj.snapshotsRanking){
+      if(!snap || !Array.isArray(snap.linhas)) continue;
+      snap.linhas = snap.linhas.filter((l,i)=> i < 60 || (passo!==Infinity && (i-60) % passo === 0));
+    }
+  }
+
+  // Passo 3: ainda grande? reduz para os 2, depois 1 snapshots mais recentes.
+  for(const manter of [2, 1]){
+    if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
+    obj.snapshotsRanking = obj.snapshotsRanking.slice(-manter);
+  }
+
+  // Último recurso: nem com 1 snapshot mínimo coube (estado muito grande por
+  // outro motivo — posições, lotes, proventos). Não tem mais o que cortar
+  // aqui com segurança; zera snapshots e deixa o resto do estado intacto.
+  if(tamanhoAtual() > ORCAMENTO_ESTADO && obj.snapshotsRanking.length > 0){
+    obj.snapshotsRanking = [];
+  }
+
+  return obj;
+}
+
 function carregarEstado(){
   try{
     const bruto = localStorage.getItem(CHAVE_STORAGE);
@@ -664,19 +755,7 @@ function carregarEstado(){
     obj.mapaTitulos = obj.mapaTitulos || {};
     obj.mapaSetores = Object.assign({}, padrao.mapaSetores, obj.mapaSetores||{});
     obj.snapshotsRanking = obj.snapshotsRanking || [];
-    // Poda de estados criados antes da limitação de 07/08/2026, que podiam
-    // guardar 164 linhas por snapshot e histórico ilimitado — isso estourava
-    // o limite de 50 mil caracteres da célula da planilha em poucos meses.
-    if(obj.snapshotsRanking.length > 3) obj.snapshotsRanking = obj.snapshotsRanking.slice(-3);
-    for(const snap of obj.snapshotsRanking){
-      if(snap && Array.isArray(snap.linhas) && snap.linhas.length > 90){
-        // Mesma regra do snapshot novo: topo íntegro + amostra da cauda.
-        // Cortar só os primeiros destruiria a faixa de EV/EBIT alto que a
-        // simulação de preço-teto precisa para achar o cruzamento.
-        snap.linhas = snap.linhas.filter((l,i)=> i < 60 || (i-60) % 3 === 0);
-      }
-    }
-    return obj;
+    return podarSnapshotsRanking(obj);
   }catch(e){
     console.error('Falha ao carregar estado local:', e);
     return estadoPadrao();
@@ -1041,6 +1120,38 @@ function numBR(s){
   return isNaN(v) ? null : v;
 }
 
+// Interpreta valores monetários que podem vir por extenso, como o oceans14
+// escreve o volume diário ("R$ 431 milhões", "R$ 17 mil", "R$ 0"). Também
+// aceita o formato cru do StatusInvest ("476.551.657,05"). Devolve o valor
+// em reais. Necessário para o piso de liquidez funcionar com as duas fontes
+// (achado de 17/08/2026: numBR devolvia null para "R$ 431 milhões", e o
+// filtro de liquidez deixava passar em vez de barrar).
+function numMonetarioExtenso(s){
+  if(s===undefined||s===null) return null;
+  let t = String(s).trim().toLowerCase();
+  if(t==='' || /^#/.test(t)) return null;
+  t = t.replace(/r\$/g,'').replace(/\s+/g,' ').trim();
+
+  let mult = 1;
+  if(/bilh/.test(t)) mult = 1e9;
+  else if(/milh/.test(t)) mult = 1e6;
+  else if(/\bmil\b/.test(t)) mult = 1e3;
+
+  // extrai só o número, tolerando separadores brasileiros
+  const m = t.match(/-?[\d.]+(?:,\d+)?/);
+  if(!m) return null;
+  let numero = m[0];
+  if(mult>1){
+    // "431" em "431 milhões" — vírgula vira decimal, ponto é separador de milhar
+    numero = numero.replace(/\./g,'').replace(',', '.');
+  } else {
+    // formato cru "476.551.657,05" — ponto é milhar, vírgula é decimal
+    numero = numero.replace(/\./g,'').replace(',', '.');
+  }
+  const v = parseFloat(numero);
+  return isNaN(v) ? null : v*mult;
+}
+
 function normalizarNomeColuna(s){
   return s.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // remove acentos
@@ -1169,18 +1280,29 @@ function processarRanking(texto, criterio){
   const iPvp    = localizarColuna(cab, ['p/vp','p / vp']);
   const iVpa    = localizarColuna(cab, ['vpa']);
   const iRoe    = localizarColuna(cab, ['roe']);
-  const iLiq    = localizarColuna(cab, ['liquidez media diaria','liquidez média diária','liq.2meses','liq. 2 meses']);
-  const iDy     = localizarColuna(cab, ['dy','div.yield','dividend yield']);
+  // Piso de liquidez: StatusInvest chama "Liquidez Media Diaria"; oceans14
+  // chama "Volume Diário". Reconhecer os dois é o que impede o filtro de
+  // segurança de falhar silenciosamente (achado de 17/08/2026: com o CSV do
+  // oceans14, a coluna não era encontrada e ações ilíquidas passavam sem aviso).
+  const iLiq    = localizarColuna(cab, ['liquidez media diaria','liquidez média diária','liq.2meses','liq. 2 meses','volume diario','volume diário']);
+  const iDy     = localizarColuna(cab, ['dy','div.yield','dividend yield','div. yield']);
   const iPl     = localizarColuna(cab, ['p/l','p / l']);
-  const iPreco  = localizarColuna(cab, ['preco','preço','cotação','cotacao']);
+  const iPreco  = localizarColuna(cab, ['preco','preço','price','cotação','cotacao']);
   // Colunas do escore parcial de qualidade — seção "Alavanca 4" da análise
   // de 05/08/2026. Informativo, nunca entra na soma do ranking nem exclui
   // candidato; existe para desempate visual entre papéis próximos no ranking.
+  // Cada critério pode vir de fontes diferentes; onde a coluna não existe, o
+  // critério fica "não verificado" (—), distinto de "não atende" (✗).
   const iRoa       = localizarColuna(cab, ['roa']);
-  const iMargemEbit= localizarColuna(cab, ['margem ebit','marg. ebit','mrg ebit']);
+  // "margem ebit" precisa ser exata: NÃO pode cair em "margem ebitda", que é
+  // outra métrica (EBITDA não desconta depreciação/amortização). Como a busca
+  // é por inclusão, "ebitda" contém "ebit" — então busco o nome mais
+  // específico primeiro e, se pegar o EBITDA por engano, trato como ausente.
+  let iMargemEbit  = localizarColuna(cab, ['margem ebit','marg. ebit','mrg ebit']);
+  if(iMargemEbit>=0 && normalizarNomeColuna(cab[iMargemEbit]).includes('ebitda')) iMargemEbit = -1;
   const iLiqCorr   = localizarColuna(cab, ['liq. corrente','liquidez corrente','liq corrente']);
   const iDivPatri  = localizarColuna(cab, ['div. liq./ patri','div liq patri','divida liquida/patrimonio','dív. líq./patri']);
-  const iCagrRec   = localizarColuna(cab, ['cagr receitas 5 anos','cresc. rec.5a','crescimento da receita']);
+  const iCagrRec   = localizarColuna(cab, ['cagr receitas 5 anos','cresc. rec.5a','crescimento da receita','cresc. receita','cresc receita']);
 
   if(iTicker<0 || iEvEbit<0 || iRoic<0){
     return { ok:false, msg:'Não encontrei colunas de Ticker, EV/EBIT e ROIC no cabeçalho: '+cab.join(' | ') };
@@ -1195,7 +1317,8 @@ function processarRanking(texto, criterio){
 
   const excluidos = { 'EV/EBIT ou ROIC ausente/≤0':[], 'financeira':[], 'patrimônio líquido negativo (P/VP ou VPA ≤ 0)':[],
                        'ROE < -50% (situação crítica)':[], 'recuperação judicial / exclusão manual':[],
-                       'liquidez abaixo do piso':[], 'classe duplicada (mantida a mais líquida)':[] };
+                       'liquidez abaixo do piso':[], 'liquidez não confirmada (coluna ausente na fonte)':[],
+                       'liquidez não confirmada (valor ilegível)':[], 'classe duplicada (mantida a mais líquida)':[] };
   let candidatos = [];
 
   for(let i=1;i<linhas.length;i++){
@@ -1207,7 +1330,7 @@ function processarRanking(texto, criterio){
     const pvp    = iPvp>=0 ? numBR(l[iPvp]) : null;
     const vpa    = iVpa>=0 ? numBR(l[iVpa]) : null;
     const roe    = iRoe>=0 ? numBR(l[iRoe]) : null;
-    const liq    = iLiq>=0 ? numBR(l[iLiq]) : null;
+    const liq    = iLiq>=0 ? numMonetarioExtenso(l[iLiq]) : null;
     const dy     = iDy>=0 ? numBR(l[iDy]) : null;
 
     if(evEbit===null || roic===null || evEbit<=0 || roic<=0){ excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue; }
@@ -1215,7 +1338,17 @@ function processarRanking(texto, criterio){
     if((pvp!==null && pvp<=0) || (vpa!==null && vpa<=0)){ excluidos['patrimônio líquido negativo (P/VP ou VPA ≤ 0)'].push(ticker); continue; }
     if(roe!==null && roe < -50){ excluidos['ROE < -50% (situação crítica)'].push(ticker); continue; }
     if(recJudicial.has(ticker)){ excluidos['recuperação judicial / exclusão manual'].push(ticker); continue; }
-    if(liq!==null && liq < pisoLiq){ excluidos['liquidez abaixo do piso'].push(ticker); continue; }
+    // Piso de liquidez, fail-closed (parecer externo + achado de 17/08/2026):
+    // o filtro de segurança recusa por padrão quando NÃO consegue confirmar
+    // liquidez — coluna ausente na fonte, ou valor ilegível. Antes, sem a
+    // coluna, o papel passava; com o CSV do oceans14 isso deixava ações
+    // ilíquidas entrarem sem aviso. Melhor barrar um papel bom por falta de
+    // dado (o usuário edita a lista/piso) do que comprar um ilíquido às cegas.
+    if(pisoLiq > 0){
+      if(iLiq < 0){ excluidos['liquidez não confirmada (coluna ausente na fonte)'].push(ticker); continue; }
+      if(liq === null){ excluidos['liquidez não confirmada (valor ilegível)'].push(ticker); continue; }
+      if(liq < pisoLiq){ excluidos['liquidez abaixo do piso'].push(ticker); continue; }
+    }
 
     const pl = iPl>=0 ? numBR(l[iPl]) : null;
     const precoAtualCsv = iPreco>=0 ? numBR(l[iPreco]) : null;
@@ -1224,26 +1357,31 @@ function processarRanking(texto, criterio){
       excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue;
     }
 
-    // Escore parcial de qualidade (0-5), informativo — nunca filtra nem
-    // entra na soma do ranking. Cinco checagens simples com o que o CSV do
-    // StatusInvest já traz; não é um F-Score de Piotroski completo (faltam
-    // fluxo de caixa operacional e variação ano a ano de contas).
+    // Escore parcial de qualidade, informativo — nunca filtra nem entra na
+    // soma do ranking. Agora distingue TRÊS estados por critério (parecer
+    // externo, 17/08/2026): atende (✓), não atende (✗) e NÃO VERIFICADO (—),
+    // este último quando a coluna não existe na fonte. Antes, coluna ausente
+    // virava ✗ silenciosamente — foi o que fez todo papel do oceans14 dar
+    // 2/5, escondendo que 3 critérios não tinham dado nenhum. O escore agora
+    // é "X/Y verificados", não "X/5" cego.
     const roa      = iRoa>=0 ? numBR(l[iRoa]) : null;
     const margEbit = iMargemEbit>=0 ? numBR(l[iMargemEbit]) : null;
     const liqCorr  = iLiqCorr>=0 ? numBR(l[iLiqCorr]) : null;
     const divPatri = iDivPatri>=0 ? numBR(l[iDivPatri]) : null;
     const cagrRec  = iCagrRec>=0 ? numBR(l[iCagrRec]) : null;
     const criterios = [
-      { nome:'ROA positivo', ok: roa!==null && roa>0 },
-      { nome:'Margem EBIT positiva', ok: margEbit!==null && margEbit>0 },
-      { nome:'Liquidez corrente > 1', ok: liqCorr!==null && liqCorr>1 },
-      { nome:'Dívida líq./patrimônio abaixo do teto', ok: divPatri!==null && divPatri < estado.config.escoreDividaMaxima },
-      { nome:'Crescimento de receita 5a positivo', ok: cagrRec!==null && cagrRec>0 }
+      { nome:'ROA positivo', verificavel: iRoa>=0, ok: roa!==null && roa>0 },
+      { nome:'Margem EBIT positiva', verificavel: iMargemEbit>=0, ok: margEbit!==null && margEbit>0 },
+      { nome:'Liquidez corrente > 1', verificavel: iLiqCorr>=0, ok: liqCorr!==null && liqCorr>1 },
+      { nome:'Dívida líq./patrimônio abaixo do teto', verificavel: iDivPatri>=0, ok: divPatri!==null && divPatri < estado.config.escoreDividaMaxima },
+      { nome:'Crescimento de receita 5a positivo', verificavel: iCagrRec>=0, ok: cagrRec!==null && cagrRec>0 }
     ];
-    const escoreQualidade = criterios.filter(c=>c.ok).length;
-    const escoreDetalhe = criterios.map(c=>`${c.ok?'✓':'✗'} ${c.nome}`).join(' · ');
+    const verificaveis = criterios.filter(c=>c.verificavel);
+    const escoreQualidade = verificaveis.filter(c=>c.ok).length;
+    const escoreTotal = verificaveis.length;   // quantos critérios a fonte permite checar
+    const escoreDetalhe = criterios.map(c=> c.verificavel ? `${c.ok?'✓':'✗'} ${c.nome}` : `— ${c.nome} (sem dado na fonte)`).join(' · ');
 
-    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv, escoreQualidade, escoreDetalhe });
+    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv, escoreQualidade, escoreTotal, escoreDetalhe });
   }
 
   // deduplicação por raiz, mantendo a classe mais líquida (memorial 5.1, regra 8)
@@ -1307,6 +1445,7 @@ function render(){
   renderHistorico();
   renderMapaTitulos();
   renderStatusBackup();
+  renderStatusTamanhoEstado();
 }
 
 /* ==========================================================================
@@ -1700,6 +1839,34 @@ function renderStatusBackup(){
   const el = document.getElementById('statusBackup');
   el.textContent = data ? `Último backup exportado em ${fmtData(data)}.` : 'Nenhum backup exportado ainda. Exporte agora.';
 }
+
+// Detalhamento do tamanho do estado por seção, para o usuário ver O QUE está
+// ocupando espaço em vez de só o total — inclui campos além de
+// snapshotsRanking porque um estado grande pode ter outra causa (muitos
+// lançamentos, muitas posições) que a poda de ranking não resolve.
+function renderStatusTamanhoEstado(){
+  const el = document.getElementById('statusTamanhoEstado');
+  if(!el) return;
+  const partes = ['posicoes','lotes','eventos','proventos','fluxosExternos','serieValorCarteira','snapshotsRanking','precos','mapaSetores','mapaTitulos'];
+  const tamanhos = partes.map(p => [p, JSON.stringify(estado[p]||{}).length]).sort((a,b)=>b[1]-a[1]);
+  const total = JSON.stringify(estado).length;
+  const linhasSnap = (estado.snapshotsRanking||[]).reduce((s,sn)=>s+(sn.linhas?sn.linhas.length:0), 0);
+
+  const cor = total > 45000 ? 'var(--falha)' : (total > 35000 ? 'var(--atencao)' : 'var(--ok)');
+  el.innerHTML = `Tamanho total: <b style="color:${cor}">${total.toLocaleString('pt-BR')}</b> de 50.000 caracteres.
+    ${estado.snapshotsRanking.length} snapshot(s) de ranking, ${linhasSnap} linhas ao todo.<br>
+    Maiores seções: ${tamanhos.slice(0,4).map(([p,t])=>`${p} (${t.toLocaleString('pt-BR')})`).join(', ')}.`;
+}
+
+document.getElementById('btnLimparSnapshots').addEventListener('click', ()=>{
+  const n = estado.snapshotsRanking.length;
+  if(n===0){ alert('Não há histórico de ranking para limpar.'); return; }
+  if(!confirm(`Isso apaga ${n} snapshot(s) de ranking guardados (posição, EV/EBIT, ROIC, qualidade de cada importação passada). Preço-teto e a aba Contexto ficam sem dado até a próxima importação de ranking. Suas posições, lançamentos e caixa NÃO são afetados. Confirma?`)) return;
+  estado.snapshotsRanking = [];
+  salvarEstado();
+  renderStatusTamanhoEstado();
+  alert('Histórico de ranking limpo. Importe um novo CSV na aba Ranking quando quiser.');
+});
 
 /* ==========================================================================
    NAVEGAÇÃO
@@ -2110,7 +2277,7 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
         (i - LIMITE_TOPO) % PASSO_CAUDA === 0 ||            // amostra da cauda
         detidosRaiz.has(raizTicker(c.ticker))               // nunca perder papel detido
       )
-      .map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade }));
+      .map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade, escoreTotal:c.escoreTotal }));
 
     estado.snapshotsRanking.push({
       data: hoje(), origem: 'statusinvest',
@@ -2151,7 +2318,57 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
   }
 });
 
+// Colunas opcionais do Ranking — preferência de TELA, não de carteira, então
+// fica só no localStorage deste aparelho, fora do estado sincronizado (um
+// celular pode querer visão compacta e o PC, visão completa, sem um
+// sobrescrever a preferência do outro a cada sincronização).
+const COLUNAS_RANKING = [
+  ['setor','Setor'], ['carteira','Carteira'], ['teto','Preço-teto'],
+  ['cotacao','Cotação'], ['mm50','MM50'], ['mm200','MM200'], ['qualidade','Qualidade']
+];
+const CHAVE_COLUNAS_RANKING = 'carteiraFormulaMagica_colunasRankingOcultas';
+
+function colunasRankingOcultas(){
+  try{ return JSON.parse(localStorage.getItem(CHAVE_COLUNAS_RANKING) || '[]'); }catch(e){ return []; }
+}
+function definirColunasRankingOcultas(lista){
+  try{ localStorage.setItem(CHAVE_COLUNAS_RANKING, JSON.stringify(lista)); }catch(e){}
+}
+
+function aplicarVisibilidadeColunasRanking(){
+  const tabela = document.getElementById('tabelaRanking');
+  const ocultas = new Set(colunasRankingOcultas());
+  tabela.className = COLUNAS_RANKING.filter(([c])=>ocultas.has(c)).map(([c])=>'oculta-'+c).join(' ');
+}
+
+function renderControlesColunaRanking(){
+  const cont = document.getElementById('controlesColunaRanking');
+  const ocultas = new Set(colunasRankingOcultas());
+  cont.innerHTML = COLUNAS_RANKING.map(([chave,rotulo])=>
+    `<label class="controle-coluna"><input type="checkbox" data-coluna="${chave}" ${ocultas.has(chave)?'':'checked'}>${rotulo}</label>`
+  ).join('') + `<button type="button" class="acao pequeno secundario" id="btnModoCompactoRanking" style="margin-left:auto">Modo compacto (celular)</button>`;
+
+  cont.querySelectorAll('[data-coluna]').forEach(chk=>{
+    chk.addEventListener('change', ()=>{
+      const atuais = new Set(colunasRankingOcultas());
+      if(chk.checked) atuais.delete(chk.dataset.coluna); else atuais.add(chk.dataset.coluna);
+      definirColunasRankingOcultas([...atuais]);
+      aplicarVisibilidadeColunasRanking();
+    });
+  });
+  document.getElementById('btnModoCompactoRanking').addEventListener('click', ()=>{
+    // Compacto = só o essencial do método (posição, ticker, EV/EBIT, ROIC,
+    // soma, DY); esconde tudo que foi adicionado depois como informação de
+    // apoio. Continua tudo lá — é um atalho de exibição, não de dado.
+    definirColunasRankingOcultas(COLUNAS_RANKING.map(([c])=>c));
+    renderControlesColunaRanking();
+    aplicarVisibilidadeColunasRanking();
+  });
+}
+
 function renderBlocoRanking(r){
+  renderControlesColunaRanking();
+  aplicarVisibilidadeColunasRanking();
   const topN = estado.config.topN;
   document.getElementById('topNLabel').textContent = 'top ' + topN;
   const ehPlRoe = r.criterio==='pl_roe';
@@ -2201,29 +2418,33 @@ function renderBlocoRanking(r){
     tr.innerHTML = `
       <td class="num">${c.posicao}</td>
       <td>${c.ticker}</td>
-      <td>${setor || '<span class="nota">?</span>'}${dentroTopN && setor && ehMelhorDoSetor ? ' <span class="tag completa">melhor do setor</span>' : ''}</td>
-      <td>${jaDetido ? '<span class="tag completa">detida ('+jaDetido+')</span>' : ''}</td>
+      <td data-col="setor">${setor || '<span class="nota">?</span>'}${dentroTopN && setor && ehMelhorDoSetor ? ' <span class="tag completa">melhor do setor</span>' : ''}</td>
+      <td data-col="carteira">${jaDetido ? '<span class="tag completa">detida ('+jaDetido+')</span>' : ''}</td>
       <td class="num">${c.fator1.toFixed(2)}</td>
       <td class="num">${fmtPct(c.fator2/100,1)}</td>
       <td class="num">${c.soma}</td>
       <td class="num">${c.dy!==null?c.dy.toFixed(1)+'%':'—'}${c.dy!==null && c.dy>30?' <span class="badge-desl">alto</span>':''}</td>
-      <td class="num">${(()=>{
+      <td class="num" data-col="teto">${(()=>{
         if(c.preco===null || r.criterio==='pl_roe') return '—';
         const cruz = precoCruzamentoTopN(linhasParaSimulacao, {ticker:c.ticker, evEbit:c.evEbit, preco:c.preco}, topN);
         return cruz ? fmtMoeda(cruz.precoCruzamento) : '—';
       })()}</td>
-      <td class="num">${(()=>{
+      <td class="num" data-col="cotacao">${(()=>{
+        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
+        return (info && info.ultimoValido!==null && info.ultimoValido!==undefined) ? fmtMoeda(info.ultimoValido) : '—';
+      })()}</td>
+      <td class="num" data-col="mm50">${(()=>{
         const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
         return (info && info.mm50) ? fmtMoeda(info.mm50) : '—';
       })()}</td>
-      <td class="num">${(()=>{
+      <td class="num" data-col="mm200">${(()=>{
         const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
         if(!info || !info.mm200) return '—';
         const precoRef = info.ultimoValido;
         const abaixo = precoRef!==null && precoRef < info.mm200;
         return fmtMoeda(info.mm200) + (abaixo ? ' <span class="badge-desl">abaixo</span>' : '');
       })()}</td>
-      <td class="num" title="${c.escoreDetalhe}">${c.escoreQualidade}/5</td>`;
+      <td class="num" data-col="qualidade" title="${c.escoreDetalhe}">${c.escoreTotal>0 ? c.escoreQualidade+'/'+c.escoreTotal : '—'}</td>`;
     tbody.appendChild(tr);
   }
 }
@@ -2974,7 +3195,8 @@ function contextoParaTicker(ticker){
     precoNoSnapshot: linha.preco,
     dentroTopN: cruzamento.dentroAgora,
     precoAlvo: cruzamento.precoCruzamento,
-    escoreQualidade: linha.escoreQualidade!==undefined ? linha.escoreQualidade : null
+    escoreQualidade: linha.escoreQualidade!==undefined ? linha.escoreQualidade : null,
+    escoreTotal: linha.escoreTotal!==undefined ? linha.escoreTotal : 5
   };
 }
 
@@ -3013,7 +3235,7 @@ function renderContexto(){
       <td class="num">${ctx.posicaoRanking!=null?ctx.posicaoRanking:'—'} / ${estado.config.topN}</td>
       <td class="num">${fmtMoeda(ctx.precoAlvo)} <span class="nota">(${rotulo})</span></td>
       <td class="num${ctx.dentroTopN?' '+classeSinal(-distancia):''}">${distancia!==null?fmtPct(distancia,1):'—'}</td>
-      <td class="num">${ctx.escoreQualidade!==null?ctx.escoreQualidade+'/5':'—'}</td>
+      <td class="num">${(ctx.escoreQualidade!==null && ctx.escoreTotal>0)?ctx.escoreQualidade+'/'+ctx.escoreTotal:'—'}</td>
       <td>${fmtData(ctx.dataSnapshot)}</td>`;
     tbody.appendChild(tr);
   }
@@ -3125,9 +3347,23 @@ function aplicarEstadoRemoto(estadoRemoto){
   estado.mapaTitulos = estadoRemoto.mapaTitulos || {};
   estado.mapaSetores = Object.assign({}, padrao.mapaSetores, estadoRemoto.mapaSetores||{});
   estado.snapshotsRanking = estadoRemoto.snapshotsRanking || [];
+
+  const linhasAntes = estado.snapshotsRanking.reduce((s,sn)=>s+(sn.linhas?sn.linhas.length:0), 0);
+  const snapshotsAntes = estado.snapshotsRanking.length;
+  podarSnapshotsRanking(estado);
+  const podou = estado.snapshotsRanking.length < snapshotsAntes ||
+    estado.snapshotsRanking.reduce((s,sn)=>s+(sn.linhas?sn.linhas.length:0), 0) < linhasAntes;
+
   recalcularCaixa();   // nunca confiar cegamente no caixa vindo de fora
   salvarLocal();
   popularListasFiltro();
+
+  if(podou){
+    // A planilha ainda tem a versão inchada — poda só local não resolve.
+    // Reenviar fecha o ciclo: a próxima sincronização de qualquer aparelho
+    // já recebe a versão enxuta.
+    agendarEnvio();
+  }
 }
 
 async function enviarEstado(){
