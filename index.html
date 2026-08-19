@@ -168,6 +168,19 @@
   <section class="tela ativa" id="tela-painel">
     <div id="alertasPainel"></div>
 
+    <h2>De onde vem o seu patrimônio</h2>
+    <p class="nota">
+      Decomposição do valor atual em três origens: o dinheiro que saiu do seu bolso, o que as empresas
+      te pagaram, e o que o mercado fez. Proventos aparecem como <b>acumulado histórico</b> — continuam
+      contados mesmo depois de reinvestidos, diferente do Caixa, que zera a cada compra.
+    </p>
+    <div class="grid-paineis">
+      <div class="card painel-item"><div class="rot">Aportado (seu dinheiro)</div><div class="val num" id="pDecAportado">—</div><div class="obs">soma dos aportes, menos retiradas</div></div>
+      <div class="card painel-item"><div class="rot">Proventos recebidos</div><div class="val num" id="pDecProventos">—</div><div class="obs" id="pDecProventosObs">dividendos e JCP, líquidos de IR</div></div>
+      <div class="card painel-item"><div class="rot">Valorização</div><div class="val num" id="pDecValorizacao">—</div><div class="obs">o que o mercado fez, já descontados os custos</div></div>
+      <div class="card painel-item"><div class="rot">Patrimônio atual</div><div class="val num" id="pDecTotal">—</div><div class="obs" id="pDecTotalObs"></div></div>
+    </div>
+
     <h2>Visão geral</h2>
     <div class="grid-paineis">
       <div class="card painel-item"><div class="rot">Valor total</div><div class="val num" id="pValorTotal">—</div></div>
@@ -551,6 +564,25 @@
     </div>
     <div id="statusSincronizacao" style="margin-top:10px"></div>
 
+    <h2>Índice de referência (IBOV)</h2>
+    <p class="nota">
+      O cartão "TWR vs IBOV" compara o retorno da sua carteira com o do índice no mesmo período. Para isso, o
+      valor do IBOV precisa ser gravado junto de cada ponto do histórico — e o GOOGLEFINANCE devolve apenas a
+      cotação do momento, sem histórico retroativo. Por isso a comparação passa a valer a partir do primeiro
+      ponto que tiver o dado.<br><br>
+      <b>Para automatizar daqui em diante:</b> acrescente uma linha na aba <code>Publica</code> da sua planilha
+      com o ticker <code>IBOV</code> e a fórmula
+      <code>=GOOGLEFINANCE("INDEXBVMF:IBOV";"price")</code>. A partir daí cada sincronização de cotações grava
+      o índice automaticamente.<br><br>
+      <b>Para semear um ponto passado</b> (ex.: o índice na data do seu primeiro aporte), use os campos abaixo.
+    </p>
+    <form id="formIbovHistorico" class="linha2">
+      <div class="campo"><label>Data</label><input type="date" id="ibovData" required></div>
+      <div class="campo"><label>Fechamento do IBOV (pontos)</label><input type="number" id="ibovValor" min="0" step="0.01" required></div>
+      <button type="submit" class="acao secundario">Gravar no histórico</button>
+    </form>
+    <div id="resultadoIbov" style="margin-top:8px"></div>
+
     <h2>Tamanho do estado sincronizado</h2>
     <p class="nota">
       Todo o estado vive numa única célula da planilha (limite operacional de 50.000 caracteres). O que mais
@@ -721,6 +753,11 @@ function podarEstado(obj){
   // preços de um CSV grande enchia ~46 mil dos 50 mil caracteres da célula.
   if(obj.precos && typeof obj.precos === 'object'){
     const manter = new Set();
+    // O índice de referência não é uma posição, mas precisa sobreviver à
+    // poda: é a base do cartão "TWR vs IBOV" e não se regenera sozinho
+    // (o GOOGLEFINANCE não devolve histórico retroativo).
+    manter.add('IBOV');
+    manter.add('INDEXBVMF:IBOV');
     // raízes e tickers detidos (posições não encerradas)
     if(Array.isArray(obj.posicoes)){
       for(const p of obj.posicoes){
@@ -745,6 +782,11 @@ function podarEstado(obj){
     }
     obj.precos = novo;
   }
+
+  // ---- PASSO 0.5: condensar a série patrimonial ----
+  // Roda sempre (não só sob pressão de tamanho): com atualização diária a
+  // série é a maior fonte de crescimento perpétuo do estado.
+  podarSerieValorCarteira(obj);
 
   // ---- PASSO 1: snapshots de ranking ----
   if(Array.isArray(obj.snapshotsRanking)){
@@ -1079,6 +1121,76 @@ function registrarSnapshotValor(){
   if(iExistente>=0) estado.serieValorCarteira[iExistente] = ponto;
   else estado.serieValorCarteira.push(ponto);
   estado.serieValorCarteira.sort((a,b)=> a.data<b.data?-1:1);
+}
+
+// Poda da série patrimonial — desenhada para uso DIÁRIO por décadas.
+// A série ganha um ponto a cada lançamento e a cada atualização de preços;
+// com atualização diária são ~250 pontos/ano (~25 mil caracteres/ano), o que
+// estouraria a célula da planilha em pouco mais de um ano.
+//
+// Estratégia: densidade decrescente com a idade — o passado distante não
+// precisa de resolução diária para o gráfico nem para o TWR de longo prazo.
+//   • últimos 120 dias: todos os pontos (resolução diária, é o que você olha)
+//   • 120 dias a 3 anos: 1 ponto por semana
+//   • mais de 3 anos: 1 ponto por mês
+//
+// CUIDADO CRÍTICO (a razão de esta função existir e não um simples slice):
+// `calcularTWR` usa `fluxoAcoesDoDia` de cada ponto para descontar o dinheiro
+// aportado antes de medir o retorno. Se um ponto com aporte for simplesmente
+// APAGADO, esse fluxo some do cálculo e o TWR passa a contar o aporte como
+// valorização de mercado — inflando o retorno permanentemente. Medido em
+// teste: uma poda ingênua (corte simples) sobre 5 anos de série dava TWR de
+// ~2.956% contra os ~57% reais. Por isso, ao condensar vários pontos em um,
+// o fluxo do grupo é SOMADO no ponto que fica. O primeiro ponto da série é a
+// base de comparação e nunca é condensado.
+//
+// TRADE-OFF ACEITO E CONHECIDO: condensar perde a informação de QUAL DIA,
+// dentro da semana/mês agregado, o aporte entrou — o TWR resultante trata o
+// fluxo como se tivesse ocorrido na fronteira do intervalo. Em teste de 5
+// anos isso deslocou o TWR de 57,1% para 61,8%. Não é viés sistemático (com
+// fluxo na fronteira do grupo o resultado é idêntico), é ruído de resolução,
+// e afeta apenas períodos com mais de 120 dias — os últimos 120 dias mantêm
+// precisão diária exata. É o preço de manter o histórico dentro do limite da
+// célula; a alternativa (série completa) estoura a planilha em ~1 ano de uso
+// diário e aí não haveria TWR nenhum.
+function podarSerieValorCarteira(obj){
+  const s = obj && obj.serieValorCarteira;
+  if(!Array.isArray(s) || s.length < 3) return obj;
+
+  const hojeMs = new Date(hoje()+'T00:00:00').getTime();
+  const DIA = 24*60*60*1000;
+
+  function chave(p, indice){
+    if(indice === 0) return '__primeiro__';           // base do TWR, sempre preservada
+    const t = new Date(p.data+'T00:00:00').getTime();
+    const idade = (hojeMs - t) / DIA;
+    if(idade <= 120) return 'd:'+p.data;              // diário (recente)
+    if(idade <= 365*3) return 'w:'+Math.floor(t/(7*DIA));   // semanal
+    const d = new Date(t);
+    return 'm:'+d.getFullYear()+'-'+d.getMonth();     // mensal (antigo)
+  }
+
+  // Agrupa preservando a ordem; de cada grupo fica o ponto MAIS RECENTE,
+  // carregando a soma dos fluxos de todos os pontos do grupo.
+  const saida = [];
+  let chaveGrupo = null;
+  for(let i=0;i<s.length;i++){
+    const p = s[i];
+    const k = chave(p, i);
+    if(k !== chaveGrupo){
+      saida.push(Object.assign({}, p));
+      chaveGrupo = k;
+    } else {
+      const anterior = saida[saida.length-1];
+      const fluxoSomado = (anterior.fluxoAcoesDoDia || 0) + (p.fluxoAcoesDoDia || 0);
+      // o ponto mais recente do grupo prevalece (valores de mercado atuais),
+      // mas com o fluxo acumulado de todo o grupo
+      saida[saida.length-1] = Object.assign({}, p, { fluxoAcoesDoDia: fluxoSomado });
+    }
+  }
+
+  obj.serieValorCarteira = saida;
+  return obj;
 }
 
 function calcularTWR(){
@@ -1538,6 +1650,99 @@ function mesesComAporte(){
   return new Set(estado.fluxosExternos.filter(f=>f.tipo==='aporte').map(f=>f.data.slice(0,7)));
 }
 
+// Decomposição do patrimônio por origem (19/08/2026). Responde à pergunta
+// "quanto é meu dinheiro, quanto a empresa me pagou, quanto foi o mercado".
+// O Caixa não serve para isso: mostra saldo momentâneo e zera a cada compra,
+// então proventos reinvestidos sumiriam de vista. Aqui os proventos são
+// ACUMULADO HISTÓRICO — continuam contados depois de reinvestidos.
+// Semeia o IBOV num ponto passado da série. Necessário porque o
+// GOOGLEFINANCE só devolve a cotação atual — pontos já gravados ficaram com
+// ibov nulo, e sem pelo menos dois pontos com índice não há comparação.
+document.getElementById('formIbovHistorico').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const data = document.getElementById('ibovData').value;
+  const valor = parseFloat(document.getElementById('ibovValor').value);
+  const div = document.getElementById('resultadoIbov');
+  if(!data || !isFinite(valor) || valor<=0){
+    div.innerHTML = '<div class="alerta critico">Informe uma data e um valor válidos.</div>';
+    return;
+  }
+
+  const ponto = estado.serieValorCarteira.find(p=>p.data===data);
+  if(ponto){
+    ponto.ibov = valor;
+    div.innerHTML = `<div class="alerta">IBOV de ${fmtData(data)} gravado (${valor.toLocaleString('pt-BR')} pontos) no ponto já existente do histórico.</div>`;
+  } else if(estado.serieValorCarteira.length===0){
+    div.innerHTML = '<div class="alerta critico">O histórico ainda está vazio. Lance ao menos uma compra ou aporte antes de semear o índice.</div>';
+    return;
+  } else {
+    // Não existe ponto exatamente nessa data. Cria um, herdando o valor
+    // patrimonial do ponto imediatamente anterior — ou, se a data for
+    // ANTERIOR a todo o histórico, do primeiro ponto (é o caso comum: semear
+    // o índice na data do primeiro aporte, cuja fotografia foi gravada num
+    // dia posterior).
+    const ordenada = [...estado.serieValorCarteira].sort((a,b)=> a.data<b.data?-1:1);
+    const anteriores = ordenada.filter(p=>p.data <= data);
+    const base = anteriores.length ? anteriores[anteriores.length-1] : ordenada[0];
+    const ehAnteriorATudo = anteriores.length===0;
+    estado.serieValorCarteira.push({
+      data,
+      valorAcoes: base.valorAcoes,
+      valorCaixa: base.valorCaixa,
+      // Se o ponto novo passa a ser o PRIMEIRO da série, ele vira a base do
+      // TWR e não pode carregar fluxo (senão o primeiro subperíodo desconta
+      // um aporte que, na nova ordenação, ainda não tinha acontecido).
+      fluxoAcoesDoDia: 0,
+      ibov: valor
+    });
+    estado.serieValorCarteira.sort((a,b)=> a.data<b.data?-1:1);
+    div.innerHTML = `<div class="alerta">Ponto criado em ${fmtData(data)} com o IBOV em ${valor.toLocaleString('pt-BR')} pontos` +
+      (ehAnteriorATudo ? ', como novo início do histórico.' : '.') + '</div>';
+  }
+
+  // registra também como cotação corrente do índice, para as próximas
+  // fotografias herdarem enquanto a sincronização automática não estiver ativa
+  if(!estado.precos['IBOV']) estado.precos['IBOV'] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, mm50:null, mm200:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+  if(!estado.precos['IBOV'].dataUltimoValido || estado.precos['IBOV'].dataUltimoValido <= data){
+    estado.precos['IBOV'].ultimoValido = valor;
+    estado.precos['IBOV'].dataUltimoValido = data;
+  }
+
+  salvarEstado();
+  render();
+});
+
+function renderDecomposicao(){
+  const aportado = estado.fluxosExternos.reduce((s,f)=> s + (f.tipo==='aporte' ? f.valor : -f.valor), 0);
+  const proventos = estado.proventos.reduce((s,pv)=> s + ((pv.valorBruto||0) - (pv.irRetido||0)), 0);
+  const calc = todasPosicoesCalculadas();
+  const valorAcoes = calc.reduce((s,c)=> s + (c.valorMercado||0), 0);
+  const patrimonio = valorAcoes + (estado.caixa.saldo||0);
+  // Valorização = o que sobrou depois de tirar o que você pôs e o que as
+  // empresas pagaram. Custos de corretagem já estão embutidos (saíram do caixa).
+  const valorizacao = patrimonio - aportado - proventos;
+
+  const el = id => document.getElementById(id);
+  el('pDecAportado').textContent = fmtMoeda(aportado);
+  el('pDecProventos').textContent = fmtMoeda(proventos);
+  el('pDecValorizacao').textContent = fmtMoeda(valorizacao);
+  el('pDecValorizacao').className = 'val num ' + classeSinal(valorizacao);
+  el('pDecTotal').textContent = fmtMoeda(patrimonio);
+
+  const nProv = estado.proventos.length;
+  el('pDecProventosObs').textContent = nProv===0
+    ? 'nenhum provento lançado ainda'
+    : `${nProv} lançamento(s), líquidos de IR`;
+
+  if(aportado > 0){
+    const ganho = proventos + valorizacao;
+    const pct = ganho/aportado*100;
+    el('pDecTotalObs').innerHTML = `resultado sobre o aportado: <span class="${classeSinal(ganho)}">${ganho>=0?'+':''}${fmtMoeda(ganho)} (${pct>=0?'+':''}${pct.toFixed(1)}%)</span>`;
+  } else {
+    el('pDecTotalObs').textContent = '';
+  }
+}
+
 function renderDisciplina(){
   const cont = document.getElementById('painelDisciplina');
   const inicio = primeiroAporte();
@@ -1578,6 +1783,7 @@ function renderDisciplina(){
 }
 
 function renderPainel(){
+  renderDecomposicao();
   renderDisciplina();
 
   const calc = todasPosicoesCalculadas();
@@ -1804,7 +2010,7 @@ function renderPosicoes(){
       <td>${fmtData(c.aniversario)}</td>
       <td>${distTxt}</td>
       <td>${tendTxt}</td>
-      <td>${c.pos.status==='incompleta'?`<button class="acao pequeno secundario" data-completar="${c.pos.id}">Completar</button>`:''}</td>`;
+      <td>${c.pos.status==='incompleta'?`<button class="acao pequeno secundario" data-completar="${c.pos.id}">Completar</button> <button class="acao pequeno secundario" data-marcar-completa="${c.pos.id}" title="Encerra a janela de complementação: a posição passa a contar como completa, sem esperar os 3 meses.">Já está completa</button>`:''}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -1818,6 +2024,22 @@ function renderPosicoes(){
       mudarTela('lancamentos');
       mudarSubTela('compra');
       mostrarSugestaoAlocacao();
+    });
+  });
+
+  // "Já está completa": encerra a janela de complementação sem esperar os 3
+  // meses. O status 'incompleta' nasce por padrão em toda compra nova e só
+  // expirava sozinho no fim da janela — não havia como declarar que a posição
+  // já tem o tamanho pretendido (pedido do usuário, 19/08/2026).
+  tbody.querySelectorAll('[data-marcar-completa]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const pos = estado.posicoes.find(p=>p.id===btn.dataset.marcarCompleta);
+      if(!pos) return;
+      if(!confirm(`Marcar ${pos.ticker} como completa? A posição deixa de aparecer como "incompleta" e sai da fila de complementação sugerida nas próximas compras. Você ainda pode comprar mais desse papel normalmente — isso só encerra a janela de complementação.`)) return;
+      pos.status = 'completa';
+      pos.dataFimJanelaComplementacao = hoje();   // fecha a janela na data de hoje
+      salvarEstado();
+      render();
     });
   });
 }
