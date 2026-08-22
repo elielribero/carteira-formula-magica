@@ -280,30 +280,6 @@
         </tr></thead><tbody></tbody></table>
       </div>
 
-      <h2>Plano do mês — para onde vai o aporte</h2>
-      <p class="nota">
-        Informe quanto você tem para aportar neste mês. A sugestão segue, nesta ordem: completar posição
-        incompleta que ainda esteja elegível; abrir posições novas enquanto a carteira não bate a meta
-        configurada, pegando os melhores colocados do corte que ainda não estão na carteira, um por setor
-        e pulando setor acima do teto; e, com a carteira já completa, reforçar apenas os papéis que
-        continuam dentro do corte, dividindo em partes iguais. O que sobrar vira caixa de reforço e entra
-        somado na sugestão do mês seguinte. Nada aqui é lançado sozinho — a sugestão é só leitura, e o
-        lançamento continua sendo seu, pelos formulários de compra e aporte.
-      </p>
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px">
-        <div>
-          <label style="display:block;font-size:12px;text-transform:uppercase;color:var(--sub);letter-spacing:.5px">Aporte deste mês (R$)</label>
-          <input type="number" step="any" min="0" id="planoValorMes" placeholder="1000" style="width:160px">
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;text-transform:uppercase;color:var(--sub);letter-spacing:.5px">Caixa de reforço acumulado (R$)</label>
-          <input type="number" step="any" min="0" id="planoCaixaReforco" style="width:200px">
-        </div>
-        <button class="acao" id="btnSugerirPlano">Sugerir alocação</button>
-        <button id="btnSalvarCaixaReforco">Salvar caixa de reforço</button>
-      </div>
-      <div id="resultadoPlanoMes"></div>
-
       <div class="rodape-acoes">
         <button class="acao" id="btnAplicarElegibilidade">Aplicar elegibilidade às posições detidas</button>
       </div>
@@ -689,10 +665,6 @@ function estadoPadrao(){
       pisoLiquidezDiaria: 200000,
       horizonteAnos: 5,
       escoreDividaMaxima: 1.0,
-      // Valor de referência que cada posição deve receber ao ser aberta.
-      // Usado pelo Plano do Mês para dividir o aporte disponível. É
-      // referência, não trava: o fracionário raramente fecha o valor exato.
-      valorAlvoPorPosicao: 500,
       // A URL de conexão NÃO fica em `config`, e sim numa chave separada do
       // localStorage: ela é por aparelho e não deve viajar dentro do estado
       // que é gravado na planilha (senão um aparelho sobrescreveria o outro).
@@ -737,12 +709,6 @@ function estadoPadrao(){
     proventos: [],
     fluxosExternos: [],
     caixa: { saldo: 0, observacao: 'Troco não alocado. Não é reserva de emergência.', movimentos: [] },
-    // Dinheiro do aporte mensal que ficou sem destino porque nenhum papel da
-    // carteira estava dentro do topN naquele mês (regra híbrida de reforço).
-    // Fica separado do `caixa` operacional, que é troco de compra — este aqui
-    // é dinheiro esperando alvo elegível, e entra inteiro na próxima sugestão
-    // em que algum papel reaparecer no corte.
-    caixaReforcoAcumulado: 0,
     precos: {},           // ticker -> {ultimoValido, dataUltimoValido, maxima52, minima52, falhasConsecutivas, suspeitaDeslistagem}
     serieValorCarteira: [],
     snapshotsRanking: []
@@ -866,7 +832,6 @@ function carregarEstado(){
     obj.mapaTitulos = obj.mapaTitulos || {};
     obj.mapaSetores = Object.assign({}, padrao.mapaSetores, obj.mapaSetores||{});
     obj.snapshotsRanking = obj.snapshotsRanking || [];
-    obj.caixaReforcoAcumulado = obj.caixaReforcoAcumulado || 0;
     const tamAntes = bruto.length;
     podarEstado(obj);
     // Se a poda reduziu algo, regrava já — senão a limpeza só existe em
@@ -1641,159 +1606,6 @@ function tickersDetidos(){
 }
 
 /* ==========================================================================
-   PLANO DO MÊS — para onde vai o aporte deste mês
-   --------------------------------------------------------------------------
-   Traduz em sugestão a regra de alocação decidida para esta carteira, na
-   ordem em que as prioridades se aplicam:
-
-   1) Posição incompleta elegível em aberto vem antes de tudo. É a mesma
-      prioridade que o formulário de compra já sinalizava; aqui ela ganha
-      valor em reais em vez de só um aviso.
-   2) Enquanto a carteira não bate a meta de posições, o dinheiro abre
-      posições novas — os melhores colocados do topN que ainda não estão na
-      carteira, um por setor no mesmo mês, pulando setor já acima do teto.
-   3) Com a carteira completa, vale a regra híbrida: reforça SÓ quem ainda
-      está dentro do topN do ranking mais recente e cujo setor não estourou
-      o teto. Divide igualmente entre os elegíveis.
-   4) O que sobrar (inclusive o mês inteiro, quando nada é elegível) vira
-      caixa de reforço, que entra somado na próxima sugestão.
-
-   Ponto importante: esta função NÃO altera estado nenhum. Ela só devolve o
-   que fazer. O lançamento continua sendo manual, pelos formulários de
-   compra e aporte — assim a sugestão nunca inventa um lançamento que você
-   não fez, e discordar dela não custa nada.
-   ========================================================================== */
-function sugerirPlanoMensal(valorDoMes){
-  const snap = ultimoSnapshotRanking();
-  if(!snap || !snap.linhas || snap.linhas.length===0){
-    return { erro: 'Nenhum ranking importado ainda. Importe a planilha na aba Ranking primeiro — a sugestão depende de saber quem está no corte deste mês.' };
-  }
-  if(!(valorDoMes>=0)){
-    return { erro: 'Informe o valor disponível para este mês.' };
-  }
-
-  const topN  = snap.topN || estado.config.topN;
-  const alvo  = estado.config.valorAlvoPorPosicao || 500;
-  const teto  = estado.config.tetoSetorPercentual;
-  const meta  = estado.config.metaPosicoes;
-  const acum  = estado.caixaReforcoAcumulado || 0;
-
-  let disponivel = valorDoMes + acum;
-  const passos = [];
-  const observacoes = [];
-
-  const abertas  = estado.posicoes.filter(p=>p.status!=='encerrada');
-  const detidos  = tickersDetidos();
-  const { valorAcoes, porSetor } = exposicaoPorSetor();
-
-  // Percentual atual do setor na carteira. Sem valor de ações ainda (carteira
-  // zerada), nada está acima do teto — evita bloquear a primeira compra.
-  function pctSetor(setor){
-    if(!setor || !valorAcoes) return 0;
-    return (porSetor[setor]||0) / valorAcoes * 100;
-  }
-
-  // Setores já contemplados por alguma sugestão DESTE mês. Semeado pelo passo
-  // 1 e não só pelo passo 2: sem isso, completar uma posição de Construção e
-  // abrir outra de Construção no mesmo mês passava batido — o dedup olhava só
-  // as aberturas e não enxergava o setor da posição completada.
-  const setoresJaUsadosNesteMes = {};
-
-  // --- 1) posição incompleta elegível
-  const incompleta = posicaoIncompletaMaisAntigaElegivel();
-  if(incompleta && disponivel > 0){
-    const c = calcularPosicao(incompleta);
-    const falta = Math.max(0, alvo - c.custoOriginal);
-    const v = Math.min(falta, disponivel);
-    if(v > 0){
-      passos.push({
-        tipo:'completar', ticker:incompleta.ticker, valor:v,
-        motivo:`posição incompleta aberta em ${fmtData(incompleta.dataAbertura)}; falta ${fmtMoeda(falta)} para o alvo de ${fmtMoeda(alvo)}`
-      });
-      disponivel -= v;
-      const setorInc = incompleta.setor || setorDoTicker(incompleta.ticker);
-      if(setorInc) setoresJaUsadosNesteMes[setorInc] = true;
-    }
-  }
-
-  // --- 2) abrir posições novas, enquanto a carteira não bate a meta
-  let abertasProjetadas = abertas.length;
-  if(abertasProjetadas < meta && disponivel >= alvo){
-    const candidatos = snap.linhas
-      .filter(l => l.posicao <= topN)
-      .filter(l => !detidos[raizTicker(l.ticker)])
-      .sort((a,b)=> a.posicao - b.posicao);
-
-    for(const cand of candidatos){
-      if(disponivel < alvo || abertasProjetadas >= meta) break;
-      const setor = setorDoTicker(cand.ticker);
-      if(setor && pctSetor(setor) > teto){
-        observacoes.push(`${cand.ticker} (#${cand.posicao}) foi pulado: setor ${setor} já está em ${pctSetor(setor).toFixed(1)}%, acima do teto de ${teto}%.`);
-        continue;
-      }
-      if(setor && setoresJaUsadosNesteMes[setor]){
-        observacoes.push(`${cand.ticker} (#${cand.posicao}) foi pulado: já há sugestão de ${setor} neste mesmo mês.`);
-        continue;
-      }
-      passos.push({
-        tipo:'abrir', ticker:cand.ticker, valor:alvo,
-        motivo:`#${cand.posicao} do ranking, fora da carteira${setor?`, setor ${setor}`:', setor não mapeado'}`
-      });
-      disponivel -= alvo;
-      abertasProjetadas++;
-      if(setor) setoresJaUsadosNesteMes[setor] = true;
-    }
-  }
-
-  // --- 3) reforço híbrido, com a carteira completa
-  if(disponivel > 0 && abertasProjetadas >= meta){
-    const elegiveis = [];
-    for(const p of abertas){
-      const linha = snap.linhas.find(l => raizTicker(l.ticker) === raizTicker(p.ticker));
-      if(!linha || linha.posicao > topN) continue;
-      const setor = p.setor || setorDoTicker(p.ticker);
-      if(setor && pctSetor(setor) > teto){
-        observacoes.push(`${p.ticker} está no corte (#${linha.posicao}) mas não recebe reforço: setor ${setor} em ${pctSetor(setor).toFixed(1)}%, acima do teto de ${teto}%.`);
-        continue;
-      }
-      elegiveis.push({ ticker:p.ticker, posicao:linha.posicao, setor });
-    }
-    if(elegiveis.length > 0){
-      elegiveis.sort((a,b)=> a.posicao - b.posicao);
-      const cota = disponivel / elegiveis.length;
-      for(const e of elegiveis){
-        passos.push({
-          tipo:'reforcar', ticker:e.ticker, valor:cota,
-          motivo:`#${e.posicao} no ranking, dentro do top ${topN}${e.setor?`, setor ${e.setor}`:''}`
-        });
-      }
-      disponivel = 0;
-    }
-  }
-
-  // --- 4) sobra
-  let cenario;
-  if(passos.length === 0){
-    cenario = 'nada-elegivel';
-  } else if(passos.some(p=>p.tipo==='reforcar')){
-    cenario = 'reforco';
-  } else {
-    cenario = 'montagem';
-  }
-
-  return {
-    passos, observacoes, cenario,
-    dataRanking: snap.data,
-    topN, alvo, meta,
-    posicoesAbertas: abertas.length,
-    caixaAnterior: acum,
-    valorDoMes,
-    sobra: disponivel,
-    novoCaixaReforco: disponivel
-  };
-}
-
-/* ==========================================================================
    RENDERIZAÇÃO
    ========================================================================== */
 
@@ -2260,7 +2072,6 @@ function renderConfig(){
   const campos = [
     ['janelaComplementacaoMeses','Janela de complementação (meses)'],
     ['metaPosicoes','Meta de posições'],
-    ['valorAlvoPorPosicao','Valor-alvo por posição (R$)'],
     ['topN','Corte de elegibilidade (top N do ranking)'],
     ['mesesRotacao','Meses até rotação'],
     ['limiteIsencaoMensal','Limite de isenção mensal de IR (R$)'],
@@ -2735,74 +2546,6 @@ document.getElementById('btnSalvarMapaSetores').addEventListener('click', ()=>{
   alert(`Mapa de setores salvo: ${Object.keys(novoMapa).length} ticker(es).` + (ignoradas>0?` ${ignoradas} linha(s) ignorada(s) por formato inválido.`:''));
 });
 
-function renderPlanoMes(){
-  const div = document.getElementById('resultadoPlanoMes');
-  const valor = parseFloat(document.getElementById('planoValorMes').value);
-  const r = sugerirPlanoMensal(isNaN(valor) ? NaN : valor);
-
-  if(r.erro){
-    div.innerHTML = `<div class="alerta">${r.erro}</div>`;
-    return;
-  }
-
-  const rotulo = { completar:'Completar', abrir:'Abrir nova', reforcar:'Reforçar' };
-  const linhas = r.passos.map(p=>`
-    <tr>
-      <td>${rotulo[p.tipo]}</td>
-      <td><b>${p.ticker}</b></td>
-      <td class="num">${fmtMoeda(p.valor)}</td>
-      <td class="nota" style="text-transform:none">${p.motivo}</td>
-    </tr>`).join('');
-
-  const tabela = r.passos.length ? `
-    <div class="tabela-scroll">
-      <table><thead><tr><th>Ação</th><th>Papel</th><th>Valor</th><th>Por quê</th></tr></thead>
-      <tbody>${linhas}</tbody></table>
-    </div>` : '';
-
-  let veredito;
-  if(r.cenario === 'nada-elegivel'){
-    veredito = `<div class="alerta">Nenhum papel elegível neste mês. Pela regra, o valor inteiro
-      (${fmtMoeda(r.valorDoMes + r.caixaAnterior)}) fica em caixa de reforço, esperando algum papel
-      da carteira reaparecer dentro do top ${r.topN}.</div>`;
-  } else if(r.cenario === 'montagem'){
-    veredito = `<div class="alerta">Carteira em montagem: ${r.posicoesAbertas} de ${r.meta} posições.
-      O aporte vai para abrir/completar posição, não para reforço.</div>`;
-  } else {
-    veredito = `<div class="alerta">Carteira completa (${r.posicoesAbertas} de ${r.meta}).
-      Regra híbrida em vigor: reforço só em quem segue no top ${r.topN}.</div>`;
-  }
-
-  const obs = r.observacoes.length
-    ? `<div class="nota" style="margin-top:8px"><b>Papéis pulados:</b><br>${r.observacoes.join('<br>')}</div>`
-    : '';
-
-  const sobra = r.sobra > 0.005
-    ? `<div class="nota" style="margin-top:8px">Sobra de ${fmtMoeda(r.sobra)} — para seguir a regra,
-       grave esse valor no campo de caixa de reforço acima, para ele entrar somado no mês que vem.</div>`
-    : '';
-
-  div.innerHTML = `
-    ${veredito}
-    ${tabela}
-    ${obs}
-    ${sobra}
-    <div class="nota" style="margin-top:8px">
-      Base: ranking de ${fmtData(r.dataRanking)}, corte top ${r.topN}, alvo de ${fmtMoeda(r.alvo)} por posição.
-      Aporte do mês ${fmtMoeda(r.valorDoMes)} + caixa de reforço ${fmtMoeda(r.caixaAnterior)}.
-      Se o ranking for de um mês anterior, importe a planilha nova antes de decidir.
-    </div>`;
-}
-
-document.getElementById('btnSugerirPlano').addEventListener('click', renderPlanoMes);
-
-document.getElementById('btnSalvarCaixaReforco').addEventListener('click', ()=>{
-  const v = parseFloat(document.getElementById('planoCaixaReforco').value);
-  estado.caixaReforcoAcumulado = isNaN(v) || v < 0 ? 0 : v;
-  salvarEstado();
-  renderPlanoMes();
-});
-
 document.getElementById('chkDestacarMelhorSetor').addEventListener('change', ()=>{
   if(ultimoRanking) renderBlocoRanking(ultimoRanking);
 });
@@ -2938,10 +2681,6 @@ function renderControlesColunaRanking(){
 function renderBlocoRanking(r){
   renderControlesColunaRanking();
   aplicarVisibilidadeColunasRanking();
-  // O campo reflete o estado gravado; editar aqui só muda o estado depois de
-  // clicar em salvar, para não alterar o caixa por engano ao digitar.
-  const campoCaixa = document.getElementById('planoCaixaReforco');
-  if(campoCaixa) campoCaixa.value = estado.caixaReforcoAcumulado || 0;
   const topN = estado.config.topN;
   document.getElementById('topNLabel').textContent = 'top ' + topN;
   const ehPlRoe = r.criterio==='pl_roe';
