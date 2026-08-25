@@ -1074,6 +1074,27 @@ function fluxoParaAcoesNaData(dataRef){
       : -(l.quantidade*l.precoUnitario - l.custos)), 0);
 }
 
+/* Fluxo por INTERVALO (correção de 25/08/2026).
+   `fluxoParaAcoesNaData` só enxerga lotes datados exatamente no dia da
+   fotografia, mas `registrarSnapshotValor` carimba o ponto com hoje().
+   Lançamento retroativo — comprar dia 20 e registrar dia 22 — ficava com o
+   fluxo preso no dia 20, enquanto o ponto nascia no dia 22 com fluxo zero:
+   o aporte nunca era descontado e o TWR passava a contar dinheiro novo como
+   valorização de mercado. Mesmo modo de falha da poda ingênua documentada em
+   19/08, por outra porta.
+   Recolhe tudo que entrou depois da fotografia anterior até a data de
+   referência. Continua idempotente ao reescrever o ponto de hoje, porque o
+   limite inferior é a data do ponto anterior, não o instante da gravação.
+   NÃO cobre lote datado antes da penúltima fotografia — esse fluxo cai num
+   intervalo já fechado e só se recupera reconstruindo a série. */
+function fluxoParaAcoesNoIntervalo(dataAte, dataDepoisDe){
+  return estado.lotes
+    .filter(l => l.data <= dataAte && (!dataDepoisDe || l.data > dataDepoisDe))
+    .reduce((f,l)=> f + (l.tipo==='compra'
+      ? (l.quantidade*l.precoUnitario + l.custos)
+      : -(l.quantidade*l.precoUnitario - l.custos)), 0);
+}
+
 /* Caixa DERIVADO (v2): o saldo é recalculado do zero a partir dos
    lançamentos, em vez de acumulado incrementalmente. Isso é o que torna
    editar e excluir lançamentos seguro — com saldo incremental, remover um
@@ -1110,11 +1131,15 @@ function registrarSnapshotValor(){
   recalcularCaixa();
   const d = hoje();
   const infoIbov = estado.precos['IBOV'] || estado.precos['INDEXBVMF:IBOV'] || null;
+  // a série é mantida ordenada por data; o último ponto anterior a hoje é a
+  // fronteira do intervalo cujo fluxo ainda não foi fotografado
+  const anteriores = estado.serieValorCarteira.filter(p => p.data < d);
+  const dataAnterior = anteriores.length ? anteriores[anteriores.length-1].data : null;
   const ponto = {
     data: d,
     valorAcoes: valorAcoesAgora(),
     valorCaixa: estado.caixa.saldo || 0,
-    fluxoAcoesDoDia: fluxoParaAcoesNaData(d),
+    fluxoAcoesDoDia: fluxoParaAcoesNoIntervalo(d, dataAnterior),
     ibov: infoIbov ? infoIbov.ultimoValido : null
   };
   const iExistente = estado.serieValorCarteira.findIndex(s=>s.data===d);
@@ -1199,8 +1224,24 @@ function calcularTWR(){
   let acumulado = 1, houvePeriodoValido = false;
   for(let i=1;i<s.length;i++){
     const vAnt = s[i-1].valorAcoes;
-    if(vAnt <= 0) continue;                    // 4.5: subperíodo ignorado se V anterior = 0
-    const r = (s[i].valorAcoes - s[i].fluxoAcoesDoDia) / vAnt - 1;
+    const fluxo = s[i].fluxoAcoesDoDia || 0;
+    let r;
+    if(vAnt > 0){
+      r = (s[i].valorAcoes - fluxo) / vAnt - 1;
+    } else if(fluxo > 0){
+      /* Carteira NASCE (ou renasce depois de zerar) neste ponto. A versão
+         anterior descartava o subperíodo inteiro quando o patrimônio anterior
+         era zero, e com ele ia embora a diferença entre o preço que você pagou
+         e o preço de referência do dia — execução mais corretagem. O TWR
+         passava a medir a partir de uma base que ninguém desembolsou.
+         Medido no caso real de 18/08/2026: pago R$ 2.466,19, fotografia do
+         mesmo dia em R$ 2.450,05; o TWR começava 0,62% acima do que deveria e
+         carregava esse ganho fantasma para sempre. A base correta aqui é o
+         dinheiro que entrou nas ações. */
+      r = s[i].valorAcoes / fluxo - 1;
+    } else {
+      continue;                                // sem patrimônio e sem fluxo: nada a medir
+    }
     if(!isFinite(r)) continue;
     acumulado *= (1+r);
     houvePeriodoValido = true;
