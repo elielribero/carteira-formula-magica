@@ -6,7 +6,7 @@
 // Subir uma nova versão do app: mude CACHE_NAME (ex.: 'carteira-fm-v2').
 // Isso invalida o cache antigo automaticamente no próximo carregamento online.
 
-const CACHE_NAME = 'carteira-fm-v19';
+const CACHE_NAME = 'carteira-fm-v20';
 const ARQUIVOS_ESSENCIAIS = [
   './',
   './index.html',
@@ -58,8 +58,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((resp) => {
-          const copia = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copia));
+          // Só guarda no cache se a resposta for boa. Sem esta checagem, um 404
+          // ou uma página de erro do servidor de hospedagem virava o
+          // './index.html' cacheado e passava a ser servida offline
+          // indefinidamente — o app "quebrado para sempre" sem causa visível.
+          if (resp && resp.ok) {
+            const copia = resp.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copia));
+          }
           return resp;
         })
         .catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
@@ -72,11 +78,19 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(req)
         .then((resp) => {
-          const copia = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copia));
+          // Mesma regra da navegação: resposta ruim não entra no cache.
+          if (resp && resp.ok) {
+            const copia = resp.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copia));
+          }
           return resp;
-        })
-        .catch(() => cached);
+        });
+      // Sem .catch aqui de propósito: o antigo era `.catch(() => cached)`, e
+      // neste ponto `cached` é sempre undefined (o `if` acima já teria
+      // retornado). Devolver undefined ao respondWith falha do mesmo jeito que
+      // deixar a promessa rejeitar, mas escondia isso atrás de um fallback
+      // aparente. Falhar aqui é o comportamento correto: é um arquivo do app
+      // shell que não está no cache e a rede não trouxe.
     })
   );
 });

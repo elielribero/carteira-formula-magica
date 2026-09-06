@@ -129,12 +129,21 @@
   <div style="max-width:520px;width:100%">
     <h1 style="font-size:16px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px">Carteira — Fórmula Mágica</h1>
     <p class="nota" style="margin-bottom:18px">
-      Cole o endereço de conexão da sua planilha (a URL do Apps Script, terminada em <b>/exec</b>).
-      Ele é pedido uma vez por aparelho e fica guardado só neste navegador — não está no código
-      da página, que é público. Sem ele o app não tem como achar seus dados.
+      Cole o endereço de conexão da sua planilha (a URL do Apps Script, terminada em <b>/exec</b>)
+      e o segredo que você definiu no script. Os dois são pedidos uma vez por aparelho e ficam
+      guardados só neste navegador — não estão no código da página, que é público. Sem eles o app
+      não tem como achar seus dados.
     </p>
     <div class="campo"><label>Endereço de conexão</label>
       <input type="text" id="inputUrlConexao" placeholder="https://script.google.com/macros/s/.../exec"></div>
+    <div class="campo" style="margin-top:10px"><label>Segredo de conexão</label>
+      <input type="password" id="inputSegredoConexao" placeholder="a frase definida em SEGREDO no Apps Script">
+      <p class="nota" style="margin-top:4px">
+        É a frase que está na variável <b>SEGREDO</b> do seu Apps Script. Ela nunca é enviada
+        dentro de um endereço — vai sempre no corpo da requisição. Deixe em branco se você ainda
+        não configurou o segredo no script.
+      </p>
+    </div>
     <div id="erroConexao" style="margin-top:8px"></div>
     <button class="acao" id="btnConectar" style="margin-top:14px">Conectar</button>
   </div>
@@ -557,6 +566,7 @@
     </p>
     <div class="campo"><label>Endereço de conexão (termina em /exec)</label>
       <input type="text" id="cfgUrlConexao" readonly style="background:var(--papel2)"></div>
+    <p class="nota" id="cfgStatusSegredo" style="margin-top:6px"></p>
     <div class="rodape-acoes">
       <button class="acao" id="btnSincronizarCotacoes">Atualizar cotações agora</button>
       <button class="acao secundario" id="btnBaixarAgora">Baixar da planilha agora</button>
@@ -3631,6 +3641,14 @@ function renderContexto(){
    ========================================================================== */
 
 const CHAVE_URL = 'carteiraFormulaMagica_url';
+// Segredo compartilhado com o Apps Script. Fica em chave PRÓPRIA do
+// localStorage, fora do `estado` — mesma razão pela qual a URL fica: é
+// configuração deste aparelho, e se viajasse dentro do estado sincronizado um
+// aparelho sobrescreveria a configuração do outro a cada abertura.
+// Nunca entra em query string: viaja sempre no corpo do POST. Colocá-lo na URL
+// o faria vazar exatamente junto com a URL, que é o vazamento de que ele
+// existe para nos defender.
+const CHAVE_SEGREDO = 'carteiraFormulaMagica_segredo';
 const CHAVE_PENDENTE = 'carteiraFormulaMagica_pendente';
 // Timestamp (campo "atualizadoEm" devolvido pelo Apps Script) da última vez
 // que ESTE aparelho confirmou saber o que está na planilha — seja por ter
@@ -3647,6 +3665,43 @@ function obterUrlConexao(){
 }
 function definirUrlConexao(u){
   try{ localStorage.setItem(CHAVE_URL, u); }catch(e){}
+}
+function obterSegredo(){
+  try{ return localStorage.getItem(CHAVE_SEGREDO) || ''; }catch(e){ return ''; }
+}
+function definirSegredo(s){
+  try{ localStorage.setItem(CHAVE_SEGREDO, s || ''); }catch(e){}
+}
+
+// Chamada única ao Apps Script. TUDO passa por POST agora — inclusive as
+// leituras, que antes eram GET. O motivo é o segredo: um GET só consegue
+// carregá-lo em query string, e aí ele vazaria junto com a URL, que é
+// justamente o vazamento contra o qual ele existe. No corpo do POST, ele não
+// aparece em histórico de navegador, captura de tela nem log de referência.
+//
+// O `Content-Type: text/plain` continua sendo de propósito: evita a
+// verificação prévia (preflight), que o Apps Script não responde bem.
+async function chamarApi(acao, estadoParaGravar){
+  const url = obterUrlConexao();
+  if(!url) throw new Error('sem endereço de conexão');
+
+  const envelope = { _envelope:1, acao: acao, segredo: obterSegredo() };
+  if(acao === 'gravar') envelope.estado = estadoParaGravar;
+
+  const r = await fetch(url, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+    redirect:'follow',
+    body: JSON.stringify(envelope)
+  });
+  if(!r.ok) throw new Error('http '+r.status);
+
+  let resp = null;
+  try{ resp = await r.json(); }catch(e){ throw new Error('resposta ilegível'); }
+  if(!resp || resp.status !== 'ok'){
+    throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
+  }
+  return resp;
 }
 function haPendencia(){
   try{ return localStorage.getItem(CHAVE_PENDENTE) === '1'; }catch(e){ return false; }
@@ -3736,18 +3791,7 @@ async function enviarEstado(){
   podarEstado(estado);
   salvarLocal();
   try{
-    const r = await fetch(url, {
-      method:'POST',
-      // text/plain evita a verificação prévia (preflight), que o Apps
-      // Script não responde bem
-      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-      redirect:'follow',
-      body: JSON.stringify(estado)
-    });
-    if(!r.ok) throw new Error('http '+r.status);
-    let resp = null;
-    try{ resp = await r.json(); }catch(e){ throw new Error('resposta ilegível'); }
-    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
+    const resp = await chamarApi('gravar', estado);
 
     definirPendencia(false);
     definirUltimoGravadoEm(resp.gravadoEm);
@@ -3768,10 +3812,7 @@ async function baixarEstado(){
   indicadorSinc('busy','sincronizando');
   let resp;
   try{
-    const r = await fetch(url, { method:'GET', redirect:'follow' });
-    if(!r.ok) throw new Error('http '+r.status);
-    resp = await r.json();
-    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
+    resp = await chamarApi('estado');
   }catch(e){
     indicadorSinc('err', haPendencia() ? 'não salvo na nuvem' : 'offline');
     bannerSinc('Sem conexão com a planilha ('+e.message+'). Mostrando a última versão salva neste aparelho. '+
@@ -3838,14 +3879,15 @@ async function sincronizarCotacoes(silencioso){
   if(!url) return false;
   if(!silencioso) indicadorSinc('busy','buscando cotações');
 
+  let dados;
   try{
-    const r = await fetch(url + '?acao=cotacoes', { method:'GET', redirect:'follow' });
-    const dados = await r.json();
-    if(!dados || dados.status !== 'ok'){
-      bannerSinc('Não foi possível buscar as cotações: '+(dados && dados.message ? dados.message : 'erro não informado'));
-      return false;
-    }
+    dados = await chamarApi('cotacoes');
+  }catch(err){
+    bannerSinc('Não foi possível buscar as cotações: '+err.message);
+    return false;
+  }
 
+  try{
     let atualizados=0, semPreco=0, novosSuspeitos=[];
     for(const c of dados.cotacoes){
       const ticker = c.ticker;
@@ -3894,6 +3936,7 @@ async function sincronizarCotacoes(silencioso){
 function mostrarTelaConexao(){
   document.getElementById('telaConexao').classList.remove('oculto');
   document.getElementById('inputUrlConexao').value = obterUrlConexao();
+  document.getElementById('inputSegredoConexao').value = obterSegredo();
 }
 function esconderTelaConexao(){
   document.getElementById('telaConexao').classList.add('oculto');
@@ -3911,7 +3954,29 @@ document.getElementById('btnConectar').addEventListener('click', async ()=>{
     return;
   }
   erro.innerHTML = '';
+  const s = document.getElementById('inputSegredoConexao').value;
+
+  // Guarda os dois ANTES do teste, porque chamarApi lê do localStorage.
+  const urlAnterior = obterUrlConexao();
+  const segredoAnterior = obterSegredo();
   definirUrlConexao(u);
+  definirSegredo(s);
+
+  // Testa antes de fechar a tela. Sem isso, um segredo errado só apareceria
+  // como um banner de falha atrás de uma tela já fechada, e o aparelho ficaria
+  // acumulando pendência de sincronização sem o usuário entender por quê —
+  // exatamente a condição que causou o bug de sobrescrita de 07/08/2026.
+  erro.innerHTML = '<p class="nota">Testando a conexão…</p>';
+  try{
+    await chamarApi('estado');
+  }catch(e){
+    definirUrlConexao(urlAnterior);
+    definirSegredo(segredoAnterior);
+    erro.innerHTML = '<div class="alerta critico">Não foi possível conectar: '+e.message+'</div>';
+    return;
+  }
+
+  erro.innerHTML = '';
   esconderTelaConexao();
   await baixarEstado();
   await sincronizarCotacoes(true);
@@ -3928,6 +3993,12 @@ document.getElementById('btnTrocarConexao').addEventListener('click', ()=> mostr
 function popularConfigSincronizacao(){
   const el = document.getElementById('cfgUrlConexao');
   if(el) el.value = obterUrlConexao();
+  const st = document.getElementById('cfgStatusSegredo');
+  if(st){
+    st.textContent = obterSegredo()
+      ? 'Segredo de conexão: definido neste aparelho.'
+      : 'Segredo de conexão: não definido neste aparelho. Se o Apps Script já estiver em modo exigente, a sincronização vai ser recusada.';
+  }
 }
 
 /* ==========================================================================
