@@ -109,18 +109,6 @@
   dialog h3{margin:0 0 10px;font-size:14px;letter-spacing:.05em;text-transform:uppercase}
   dialog .acoes{display:flex;gap:8px;margin-top:16px}
   .oculto{display:none !important}
-  /* Colunas opcionais do Ranking (17/08/2026): cada uma some por CSS quando
-     a tabela recebe a classe correspondente — evita reescrever a linha
-     inteira só para esconder uma célula. */
-  #tabelaRanking.oculta-setor [data-col="setor"],
-  #tabelaRanking.oculta-carteira [data-col="carteira"],
-  #tabelaRanking.oculta-graham [data-col="graham"],
-  #tabelaRanking.oculta-cotacao [data-col="cotacao"],
-  #tabelaRanking.oculta-mm50 [data-col="mm50"],
-  #tabelaRanking.oculta-mm200 [data-col="mm200"],
-  #tabelaRanking.oculta-qualidade [data-col="qualidade"]{ display:none }
-  .controle-coluna{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;color:var(--sub)}
-  .controle-coluna input{width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -129,21 +117,12 @@
   <div style="max-width:520px;width:100%">
     <h1 style="font-size:16px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px">Carteira — Fórmula Mágica</h1>
     <p class="nota" style="margin-bottom:18px">
-      Cole o endereço de conexão da sua planilha (a URL do Apps Script, terminada em <b>/exec</b>)
-      e o segredo que você definiu no script. Os dois são pedidos uma vez por aparelho e ficam
-      guardados só neste navegador — não estão no código da página, que é público. Sem eles o app
-      não tem como achar seus dados.
+      Cole o endereço de conexão da sua planilha (a URL do Apps Script, terminada em <b>/exec</b>).
+      Ele é pedido uma vez por aparelho e fica guardado só neste navegador — não está no código
+      da página, que é público. Sem ele o app não tem como achar seus dados.
     </p>
     <div class="campo"><label>Endereço de conexão</label>
       <input type="text" id="inputUrlConexao" placeholder="https://script.google.com/macros/s/.../exec"></div>
-    <div class="campo" style="margin-top:10px"><label>Segredo de conexão</label>
-      <input type="password" id="inputSegredoConexao" placeholder="a frase definida em SEGREDO no Apps Script">
-      <p class="nota" style="margin-top:4px">
-        É a frase que está na variável <b>SEGREDO</b> do seu Apps Script. Ela nunca é enviada
-        dentro de um endereço — vai sempre no corpo da requisição. Deixe em branco se você ainda
-        não configurou o segredo no script.
-      </p>
-    </div>
     <div id="erroConexao" style="margin-top:8px"></div>
     <button class="acao" id="btnConectar" style="margin-top:14px">Conectar</button>
   </div>
@@ -177,19 +156,6 @@
   <section class="tela ativa" id="tela-painel">
     <div id="alertasPainel"></div>
 
-    <h2>De onde vem o seu patrimônio</h2>
-    <p class="nota">
-      Decomposição do valor atual em três origens: o dinheiro que saiu do seu bolso, o que as empresas
-      te pagaram, e o que o mercado fez. Proventos aparecem como <b>acumulado histórico</b> — continuam
-      contados mesmo depois de reinvestidos, diferente do Caixa, que zera a cada compra.
-    </p>
-    <div class="grid-paineis">
-      <div class="card painel-item"><div class="rot">Aportado (seu dinheiro)</div><div class="val num" id="pDecAportado">—</div><div class="obs">soma dos aportes, menos retiradas</div></div>
-      <div class="card painel-item"><div class="rot">Proventos recebidos</div><div class="val num" id="pDecProventos">—</div><div class="obs" id="pDecProventosObs">dividendos e JCP, líquidos de IR</div></div>
-      <div class="card painel-item"><div class="rot">Valorização</div><div class="val num" id="pDecValorizacao">—</div><div class="obs">o que o mercado fez, já descontados os custos</div></div>
-      <div class="card painel-item"><div class="rot">Patrimônio atual</div><div class="val num" id="pDecTotal">—</div><div class="obs" id="pDecTotalObs"></div></div>
-    </div>
-
     <h2>Visão geral</h2>
     <div class="grid-paineis">
       <div class="card painel-item"><div class="rot">Valor total</div><div class="val num" id="pValorTotal">—</div></div>
@@ -200,9 +166,6 @@
       <div class="card painel-item"><div class="rot">TWR vs IBOV</div><div class="val num" id="pVsIbov">—</div></div>
       <div class="card painel-item"><div class="rot">Posições</div><div class="val num" id="pPosicoes">—</div><div class="obs" id="pPosicoesObs"></div></div>
     </div>
-
-    <h2>Disciplina do plano</h2>
-    <div id="painelDisciplina"></div>
 
     <h2>Evolução patrimonial</h2>
     <div id="containerGrafico" class="card"></div>
@@ -223,11 +186,11 @@
       <table id="tabelaPosicoes"><thead><tr>
         <th>Ticker</th><th>Status</th><th>Elegível</th><th>Qtd.</th><th>Preço médio</th>
         <th>Preço atual</th><th>Valor</th><th>Rent.</th><th>Rent. R$</th>
-        <th>Abertura</th><th>Aniversário</th><th>Dist. máx/mín 52s</th><th>Tendência (MM50/MM200)</th><th></th>
+        <th>Abertura</th><th>Aniversário</th><th>Dist. máx/mín 52s</th><th></th>
       </tr></thead><tbody></tbody></table>
     </div>
     <div class="msg-vazio oculto" id="msgSemPosicoes2">Nenhuma posição lançada ainda.</div>
-    <p class="nota">Distância de máxima/mínima de 52 semanas e tendência de médias móveis são informação de contexto, não sinal de compra ou venda.</p>
+    <p class="nota">Distância de máxima/mínima de 52 semanas é informação de contexto, não sinal de compra ou venda.</p>
   </section>
 
   <!-- ===================== RANKING (MÓDULO 2) ===================== -->
@@ -266,26 +229,10 @@
       <p class="nota">
         DY acima de 30% é sinalizado, não excluído — costuma indicar provento extraordinário que não se repete.
         O corte de elegibilidade (<span id="topNLabel"></span>) está destacado; abaixo dele a linha aparece esmaecida.
-        MM50/MM200 e Qualidade só aparecem se você configurou a sincronização de cotações com essas colunas —
-        são <b>informação para apoiar a decisão, não filtro</b>: nada aqui exclui um papel do ranking nem muda a
-        soma. Qualidade é um escore parcial (X de Y critérios verificáveis na fonte — colunas ausentes aparecem como "sem dado", não como reprovado): ROA, margem EBIT e crescimento de receita positivos, liquidez
-        corrente acima de 1, dívida líquida/patrimônio dentro do teto configurado — passe o mouse para ver o detalhe.
-        Preço Justo (Graham) = √(22,5 × LPA × VPA), com a margem entre parênteses (positiva = cotação abaixo do
-        justo, a favor da compra). É uma <b>segunda lente de preço, informativa</b> — não substitui o EV/EBIT do
-        método nem entra na soma. Fica em branco quando a empresa teve prejuízo ou patrimônio negativo (a fórmula
-        não se aplica). Lembre que Graham supervaloriza o patrimônio, o que subestima o preço justo de empresas de
-        serviços e tecnologia com poucos ativos.
       </p>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <input type="checkbox" id="chkDestacarMelhorSetor" style="width:auto">
-        <label for="chkDestacarMelhorSetor" style="text-transform:none;font-size:13px;color:var(--tinta)">
-          Destacar apenas a melhor posicionada de cada setor (só realce visual — nenhuma linha some, nenhum dado muda)
-        </label>
-      </div>
-      <div id="controlesColunaRanking" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12px"></div>
       <div class="tabela-scroll">
         <table id="tabelaRanking"><thead><tr>
-          <th>#</th><th>Ticker</th><th data-col="setor">Setor</th><th data-col="carteira">Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th data-col="graham">Preço Justo (Graham)*</th><th data-col="cotacao">Cotação</th><th data-col="mm50">MM50</th><th data-col="mm200">MM200</th><th data-col="qualidade">Qualidade*</th>
+          <th>#</th><th>Ticker</th><th>Carteira</th><th id="thFator1">EV/EBIT</th><th id="thFator2">ROIC</th><th>Soma</th><th>DY</th><th>Preço-teto/entrada*</th>
         </tr></thead><tbody></tbody></table>
       </div>
 
@@ -303,16 +250,6 @@
     <div class="campo" style="margin-top:8px;max-width:260px"><label>Piso de liquidez diária (R$)</label>
       <input type="number" id="pisoLiquidez" min="0" step="1000"></div>
     <button class="acao secundario" id="btnSalvarListas" style="margin-top:8px">Salvar listas e piso</button>
-
-    <h2>Mapa de setores</h2>
-    <p class="nota">
-      Um <code>TICKER=Setor</code> por linha (use a raiz do ticker, sem o número — ex.: <code>RIAA=Vestuário</code>
-      cobre RIAA3). Alimenta a coluna Setor do ranking, o destaque de melhor-por-setor, e o aviso de
-      concentração na tela de compra. Cresce conforme você completa tickers novos — a ferramenta não inventa
-      setor para o que não conhece.
-    </p>
-    <div class="campo"><textarea id="mapaSetoresTexto" style="min-height:140px;font-size:12px"></textarea></div>
-    <button class="acao secundario" id="btnSalvarMapaSetores" style="margin-top:8px">Salvar mapa de setores</button>
   </section>
 
   <!-- ===================== CALENDÁRIO (MÓDULO 3) ===================== -->
@@ -362,7 +299,7 @@
     <div class="tabela-scroll">
       <table id="tabelaContexto"><thead><tr>
         <th>Ticker</th><th>Preço atual</th><th>EV/EBIT no ranking</th><th>Posição no ranking</th>
-        <th>Preço-teto/entrada estimado</th><th>Distância</th><th>Qualidade*</th><th>Ranking de</th>
+        <th>Preço-teto/entrada estimado</th><th>Distância</th><th>Ranking de</th>
       </tr></thead><tbody></tbody></table>
     </div>
     <div class="msg-vazio oculto" id="msgSemContexto"></div>
@@ -388,7 +325,6 @@
     <!-- COMPRA -->
     <div class="sub-tela" id="sub-compra">
       <div id="sugestaoAlocacao" class="alerta oculto"></div>
-      <div id="avisoConcentracao" style="margin-bottom:10px"></div>
       <form id="formCompra" class="linha2">
         <div class="campo"><label>Ticker</label><input type="text" id="cTicker" placeholder="ex.: PLPL3" required></div>
         <div class="campo"><label>Empresa (opcional)</label><input type="text" id="cEmpresa"></div>
@@ -546,8 +482,6 @@
         <div class="campo"><label>Preço (R$)</label><input type="number" id="mpPreco" min="0" step="0.01" required></div>
         <div class="campo"><label>Máxima 52 sem. (opcional)</label><input type="number" id="mpMax52" min="0" step="0.01"></div>
         <div class="campo"><label>Mínima 52 sem. (opcional)</label><input type="number" id="mpMin52" min="0" step="0.01"></div>
-        <div class="campo"><label>MM50 (opcional)</label><input type="number" id="mpMM50" min="0" step="0.01"></div>
-        <div class="campo"><label>MM200 (opcional)</label><input type="number" id="mpMM200" min="0" step="0.01"></div>
         <button type="submit" class="acao">Atualizar</button>
       </form>
     </div>
@@ -566,43 +500,12 @@
     </p>
     <div class="campo"><label>Endereço de conexão (termina em /exec)</label>
       <input type="text" id="cfgUrlConexao" readonly style="background:var(--papel2)"></div>
-    <p class="nota" id="cfgStatusSegredo" style="margin-top:6px"></p>
     <div class="rodape-acoes">
       <button class="acao" id="btnSincronizarCotacoes">Atualizar cotações agora</button>
       <button class="acao secundario" id="btnBaixarAgora">Baixar da planilha agora</button>
       <button class="acao secundario" id="btnTrocarConexao">Trocar endereço de conexão</button>
     </div>
     <div id="statusSincronizacao" style="margin-top:10px"></div>
-
-    <h2>Índice de referência (IBOV)</h2>
-    <p class="nota">
-      O cartão "TWR vs IBOV" compara o retorno da sua carteira com o do índice no mesmo período. Para isso, o
-      valor do IBOV precisa ser gravado junto de cada ponto do histórico — e o GOOGLEFINANCE devolve apenas a
-      cotação do momento, sem histórico retroativo. Por isso a comparação passa a valer a partir do primeiro
-      ponto que tiver o dado.<br><br>
-      <b>Para automatizar daqui em diante:</b> acrescente uma linha na aba <code>Publica</code> da sua planilha
-      com o ticker <code>IBOV</code> e a fórmula
-      <code>=GOOGLEFINANCE("INDEXBVMF:IBOV";"price")</code>. A partir daí cada sincronização de cotações grava
-      o índice automaticamente.<br><br>
-      <b>Para semear um ponto passado</b> (ex.: o índice na data do seu primeiro aporte), use os campos abaixo.
-    </p>
-    <form id="formIbovHistorico" class="linha2">
-      <div class="campo"><label>Data</label><input type="date" id="ibovData" required></div>
-      <div class="campo"><label>Fechamento do IBOV (pontos)</label><input type="number" id="ibovValor" min="0" step="0.01" required></div>
-      <button type="submit" class="acao secundario">Gravar no histórico</button>
-    </form>
-    <div id="resultadoIbov" style="margin-top:8px"></div>
-
-    <h2>Tamanho do estado sincronizado</h2>
-    <p class="nota">
-      Todo o estado vive numa única célula da planilha (limite operacional de 50.000 caracteres). O que mais
-      cresce é o histórico de ranking; a ferramenta poda automaticamente, mas se a mensagem de "gravação
-      recusada" persistir, use o botão abaixo para agir na hora, sem esperar a poda automática.
-    </p>
-    <p class="nota" id="statusTamanhoEstado"></p>
-    <div class="rodape-acoes">
-      <button class="acao secundario" id="btnLimparSnapshots">Liberar espaço (limpar dados descartáveis)</button>
-    </div>
 
     <h2>Backup local</h2>
     <p class="nota" id="statusBackup"></p>
@@ -650,16 +553,6 @@ const CHAVE_STORAGE = 'carteiraFormulaMagica_v1';
 const CHAVE_BACKUP_DATA = 'carteiraFormulaMagica_ultimoBackup';
 const VERSAO_SCHEMA = 1;
 
-// Orçamento de tamanho do estado sincronizado (folga abaixo do limite duro
-// de 50.000 caracteres por célula). Precisa estar declarada AQUI, antes de
-// `let estado = carregarEstado()` mais abaixo — bug real encontrado em
-// teste (17/08/2026): a declaração original ficava perto de
-// podarSnapshotsRanking, mas essa função é chamada dentro de
-// carregarEstado(), que roda ANTES desse ponto do arquivo. `const` fica em
-// "zona morta temporal" até sua própria linha executar (diferente de
-// função, que é içada inteira) — resultado: ReferenceError ao abrir o app.
-const ORCAMENTO_ESTADO = 40000;
-
 function estadoPadrao(){
   return {
     versaoSchema: VERSAO_SCHEMA,
@@ -673,13 +566,11 @@ function estadoPadrao(){
       tetoSetorPercentual: 25,
       falhasParaSuspeitaDeslistagem: 3,
       pisoLiquidezDiaria: 200000,
-      horizonteAnos: 5,
-      escoreDividaMaxima: 1.0,
       // A URL de conexão NÃO fica em `config`, e sim numa chave separada do
       // localStorage: ela é por aparelho e não deve viajar dentro do estado
       // que é gravado na planilha (senão um aparelho sobrescreveria o outro).
 
-      dataVerificacaoParametrosFiscais: '2026-08-07'
+      dataVerificacaoParametrosFiscais: ''
     },
     // Listas editáveis do filtro do Módulo 2 (memorial, seção 5.1).
     // Lista inicial de financeiras verificada em 04/08/2026.
@@ -692,27 +583,6 @@ function estadoPadrao(){
     // corretagem) -> ticker. A nota não traz o ticker, só nome + classe.
     // Aprende conforme o usuário confirma cada importação.
     mapaTitulos: {},
-    // Correspondência ticker -> setor, usada para a coluna informativa do
-    // Ranking, o destaque de melhor-por-setor, e o aviso preventivo de
-    // concentração na compra. Semeado em 05/08/2026 com o que foi confirmado
-    // por busca nesta conversa (fonte: classificação setorial B3, nível
-    // Segmento). Cresce conforme você completa tickers novos — mesmo padrão
-    // do mapaTitulos.
-    mapaSetores: {
-      RIAA:'Vestuário', CEAB:'Vestuário', LREN:'Vestuário', AMAR:'Vestuário',
-      SEER:'Serviços Educacionais', CSED:'Serviços Educacionais', COGN:'Serviços Educacionais', ANIM:'Serviços Educacionais', YDUQ:'Serviços Educacionais',
-      PLPL:'Construção Civil', JHSF:'Construção Civil', MDNE:'Construção Civil', TEND:'Construção Civil',
-      MRVE:'Construção Civil', CYRE:'Construção Civil', EZTC:'Construção Civil', EVEN:'Construção Civil',
-      DIRR:'Construção Civil', CURY:'Construção Civil', LAVV:'Construção Civil', TRIS:'Construção Civil',
-      ALLD:'Comércio e Distribuição', MGLU:'Comércio e Distribuição', BHIA:'Comércio e Distribuição',
-      CVCB:'Viagens e Turismo',
-      PETR:'Petróleo, Gás e Biocombustíveis', PRIO:'Petróleo, Gás e Biocombustíveis', RECV:'Petróleo, Gás e Biocombustíveis',
-      VALE:'Mineração', CSNA:'Siderurgia', GGBR:'Siderurgia', GOAU:'Siderurgia', USIM:'Siderurgia',
-      SUZB:'Papel e Celulose', KLBN:'Papel e Celulose',
-      ABEV:'Bebidas', WEGE:'Máquinas e Equipamentos',
-      TIMS:'Telecomunicações', VIVT:'Telecomunicações',
-      PGMN:'Comércio Farmacêutico', RADL:'Comércio Farmacêutico', PNVL:'Comércio Farmacêutico'
-    },
     posicoes: [],
     lotes: [],
     eventos: [],
@@ -727,103 +597,7 @@ function estadoPadrao(){
 
 let estado = carregarEstado();
 let estadoAnterior = null; // para desfazer (spec 5.6)
-
-// Poda de snapshotsRanking — histórico de ranking mora numa única célula da
-// planilha (limite 50 mil caracteres, ver memorial 07/08/2026). Precisa
-// rodar em QUALQUER caminho que traga um `estado` de fora do processo atual,
-// não só no carregamento local: bug real corrigido em 07/08/2026 — esta
-// poda existia só em carregarEstado() (mirror local), mas a arquitetura usa
-// a planilha como fonte da verdade, então o caminho que roda quase sempre é
-// aplicarEstadoRemoto() (puxado da planilha), que copiava snapshotsRanking
-// sem podar nada. Resultado: o histórico crescia sem limite a cada
-// sincronização, até a gravação ser recusada por excesso de tamanho.
-// Poda de snapshotsRanking — histórico de ranking mora numa única célula da
-// planilha (limite 50 mil caracteres, ver memorial 07/08/2026).
-//
-// CORREÇÃO (17/08/2026): a versão anterior aplicava uma fórmula FIXA (corta
-// em 90 linhas, mantém topo de 60) sem nunca medir o resultado. Isso supõe
-// implicitamente topN≈30; com topN maior configurado, ou com mais posições/
-// lotes/proventos acumulados que no cenário testado, a fórmula podia não
-// bastar — e como nunca media, não tinha como saber que ainda estava grande
-// demais. Reescrita para MEDIR o tamanho serializado de verdade e reduzir em
-// passos até caber no orçamento, em vez de confiar numa fórmula única.
-function podarEstado(obj){
-  if(!obj) return obj;
-
-  function tamanhoAtual(){
-    try{ return JSON.stringify(obj).length; }catch(e){ return 0; }
-  }
-
-  // ---- PASSO 0: podar `precos` (a maior causa de estouro, medido 18/08/2026) ----
-  // `precos` guardava uma entrada para CADA ticker que já passou por qualquer
-  // importação — 600+ empresas de um CSV completo. Mas só interessa o preço
-  // de quem está na carteira ou aparece no snapshot de ranking mais recente
-  // (o preço-teto usa esses). O resto é descartável: regenera sozinho na
-  // próxima importação de preços. Sem esta poda, uma única importação de
-  // preços de um CSV grande enchia ~46 mil dos 50 mil caracteres da célula.
-  if(obj.precos && typeof obj.precos === 'object'){
-    const manter = new Set();
-    // O índice de referência não é uma posição, mas precisa sobreviver à
-    // poda: é a base do cartão "TWR vs IBOV" e não se regenera sozinho
-    // (o GOOGLEFINANCE não devolve histórico retroativo).
-    manter.add('IBOV');
-    manter.add('INDEXBVMF:IBOV');
-    // raízes e tickers detidos (posições não encerradas)
-    if(Array.isArray(obj.posicoes)){
-      for(const p of obj.posicoes){
-        if(p && p.ticker && p.status !== 'encerrada'){
-          manter.add(p.ticker.toUpperCase());
-          manter.add(p.ticker.toUpperCase().replace(/\d+$/,'')); // raiz
-        }
-      }
-    }
-    // tickers do snapshot de ranking mais recente (preço-teto depende deles)
-    if(Array.isArray(obj.snapshotsRanking) && obj.snapshotsRanking.length){
-      const ultimo = obj.snapshotsRanking[obj.snapshotsRanking.length-1];
-      if(ultimo && Array.isArray(ultimo.linhas)){
-        for(const l of ultimo.linhas){ if(l && l.ticker) manter.add(l.ticker.toUpperCase()); }
-      }
-    }
-    // reconstrói precos só com o que interessa (casa por ticker exato ou raiz)
-    const novo = {};
-    for(const [tk, info] of Object.entries(obj.precos)){
-      const T = tk.toUpperCase();
-      if(manter.has(T) || manter.has(T.replace(/\d+$/,''))) novo[tk] = info;
-    }
-    obj.precos = novo;
-  }
-
-  // ---- PASSO 0.5: condensar a série patrimonial ----
-  // Roda sempre (não só sob pressão de tamanho): com atualização diária a
-  // série é a maior fonte de crescimento perpétuo do estado.
-  podarSerieValorCarteira(obj);
-
-  // ---- PASSO 1: snapshots de ranking ----
-  if(Array.isArray(obj.snapshotsRanking)){
-    if(obj.snapshotsRanking.length > 3) obj.snapshotsRanking = obj.snapshotsRanking.slice(-3);
-
-    const passosCauda = [3, 5, 8, Infinity];   // Infinity = só o topo, sem cauda
-    for(const passo of passosCauda){
-      if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
-      for(const snap of obj.snapshotsRanking){
-        if(!snap || !Array.isArray(snap.linhas)) continue;
-        snap.linhas = snap.linhas.filter((l,i)=> i < 60 || (passo!==Infinity && (i-60) % passo === 0));
-      }
-    }
-    for(const manter of [2, 1]){
-      if(tamanhoAtual() <= ORCAMENTO_ESTADO) break;
-      obj.snapshotsRanking = obj.snapshotsRanking.slice(-manter);
-    }
-    if(tamanhoAtual() > ORCAMENTO_ESTADO && obj.snapshotsRanking.length > 0){
-      obj.snapshotsRanking = [];
-    }
-  }
-
-  return obj;
-}
-
-// Compatibilidade: o nome antigo ainda é chamado em alguns pontos.
-function podarSnapshotsRanking(obj){ return podarEstado(obj); }
+higienizarEstado();
 
 function carregarEstado(){
   try{
@@ -840,17 +614,7 @@ function carregarEstado(){
     obj.config = Object.assign({}, padrao.config, obj.config||{});
     obj.listasFiltro = Object.assign({}, padrao.listasFiltro, obj.listasFiltro||{});
     obj.mapaTitulos = obj.mapaTitulos || {};
-    obj.mapaSetores = Object.assign({}, padrao.mapaSetores, obj.mapaSetores||{});
     obj.snapshotsRanking = obj.snapshotsRanking || [];
-    const tamAntes = bruto.length;
-    podarEstado(obj);
-    // Se a poda reduziu algo, regrava já — senão a limpeza só existe em
-    // memória e o estado incha de novo no próximo boot (bug pego em teste,
-    // 18/08/2026). O envio à planilha continua acontecendo pelo fluxo normal.
-    try{
-      const depois = JSON.stringify(obj);
-      if(depois.length < tamAntes) localStorage.setItem(CHAVE_STORAGE, depois);
-    }catch(e){ console.error(e); }
     return obj;
   }catch(e){
     console.error('Falha ao carregar estado local:', e);
@@ -878,7 +642,12 @@ function uuid(){
   });
 }
 
-function hoje(){ return new Date().toISOString().slice(0,10); }
+function isoLocal(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// Data local do aparelho. toISOString() devolve UTC: depois das 21h em Brasília
+// já seria o dia seguinte (preços e snapshots saíam datados de "amanhã").
+function hoje(){ return isoLocal(new Date()); }
 function addMeses(dataISO, n){
   const d = new Date(dataISO+'T00:00:00');
   d.setMonth(d.getMonth()+n);
@@ -1000,6 +769,24 @@ function calcularPosicao(pos){
   };
 }
 
+// Limpeza idempotente do estado. Remove (1) posições sem nenhum lote — sobram
+// quando se edita o ticker de uma compra, porque o lote é reapontado para a
+// posição nova e a antiga fica vazia — e (2) pontos da série datados no futuro.
+function higienizarEstado(){
+  let mudou = false;
+  const comLote = new Set(estado.lotes.map(l=>l.posicaoId));
+  const comBonif = new Set((estado.eventos||[]).filter(e=>e.tipo==='bonificacao').map(e=>e.ticker));
+  const nPos = estado.posicoes.length;
+  estado.posicoes = estado.posicoes.filter(p => comLote.has(p.id) || comBonif.has(p.ticker));
+  if(estado.posicoes.length !== nPos) mudou = true;
+
+  const h = hoje();
+  const serie = estado.serieValorCarteira || [];
+  const novaSerie = serie.filter(pt => pt.data <= h);
+  if(novaSerie.length !== serie.length){ estado.serieValorCarteira = novaSerie; mudou = true; }
+  return mudou;
+}
+
 function todasPosicoesCalculadas(){
   return estado.posicoes.map(calcularPosicao);
 }
@@ -1084,27 +871,6 @@ function fluxoParaAcoesNaData(dataRef){
       : -(l.quantidade*l.precoUnitario - l.custos)), 0);
 }
 
-/* Fluxo por INTERVALO (correção de 25/08/2026).
-   `fluxoParaAcoesNaData` só enxerga lotes datados exatamente no dia da
-   fotografia, mas `registrarSnapshotValor` carimba o ponto com hoje().
-   Lançamento retroativo — comprar dia 20 e registrar dia 22 — ficava com o
-   fluxo preso no dia 20, enquanto o ponto nascia no dia 22 com fluxo zero:
-   o aporte nunca era descontado e o TWR passava a contar dinheiro novo como
-   valorização de mercado. Mesmo modo de falha da poda ingênua documentada em
-   19/08, por outra porta.
-   Recolhe tudo que entrou depois da fotografia anterior até a data de
-   referência. Continua idempotente ao reescrever o ponto de hoje, porque o
-   limite inferior é a data do ponto anterior, não o instante da gravação.
-   NÃO cobre lote datado antes da penúltima fotografia — esse fluxo cai num
-   intervalo já fechado e só se recupera reconstruindo a série. */
-function fluxoParaAcoesNoIntervalo(dataAte, dataDepoisDe){
-  return estado.lotes
-    .filter(l => l.data <= dataAte && (!dataDepoisDe || l.data > dataDepoisDe))
-    .reduce((f,l)=> f + (l.tipo==='compra'
-      ? (l.quantidade*l.precoUnitario + l.custos)
-      : -(l.quantidade*l.precoUnitario - l.custos)), 0);
-}
-
 /* Caixa DERIVADO (v2): o saldo é recalculado do zero a partir dos
    lançamentos, em vez de acumulado incrementalmente. Isso é o que torna
    editar e excluir lançamentos seguro — com saldo incremental, remover um
@@ -1141,117 +907,52 @@ function registrarSnapshotValor(){
   recalcularCaixa();
   const d = hoje();
   const infoIbov = estado.precos['IBOV'] || estado.precos['INDEXBVMF:IBOV'] || null;
-  // a série é mantida ordenada por data; o último ponto anterior a hoje é a
-  // fronteira do intervalo cujo fluxo ainda não foi fotografado
-  const anteriores = estado.serieValorCarteira.filter(p => p.data < d);
-  const dataAnterior = anteriores.length ? anteriores[anteriores.length-1].data : null;
+  const calcSnap = todasPosicoesCalculadas();
+  // posição aberta sem preço vale zero na soma: o ponto subestima o patrimônio.
+  // Marca para o gráfico e o TWR ignorarem em vez de gravar um tombo falso.
+  const semPreco = calcSnap.some(c => c.qtd>0 && c.precoAtual===null);
   const ponto = {
     data: d,
-    valorAcoes: valorAcoesAgora(),
+    valorAcoes: calcSnap.reduce((t,c)=> t + (c.valorMercado||0), 0),
     valorCaixa: estado.caixa.saldo || 0,
-    fluxoAcoesDoDia: fluxoParaAcoesNoIntervalo(d, dataAnterior),
+    fluxoAcoesDoDia: fluxoParaAcoesNaData(d),
     ibov: infoIbov ? infoIbov.ultimoValido : null
   };
+  if(semPreco) ponto.incompleto = true;
   const iExistente = estado.serieValorCarteira.findIndex(s=>s.data===d);
   if(iExistente>=0) estado.serieValorCarteira[iExistente] = ponto;
   else estado.serieValorCarteira.push(ponto);
   estado.serieValorCarteira.sort((a,b)=> a.data<b.data?-1:1);
 }
 
-// Poda da série patrimonial — desenhada para uso DIÁRIO por décadas.
-// A série ganha um ponto a cada lançamento e a cada atualização de preços;
-// com atualização diária são ~250 pontos/ano (~25 mil caracteres/ano), o que
-// estouraria a célula da planilha em pouco mais de um ano.
-//
-// Estratégia: densidade decrescente com a idade — o passado distante não
-// precisa de resolução diária para o gráfico nem para o TWR de longo prazo.
-//   • últimos 120 dias: todos os pontos (resolução diária, é o que você olha)
-//   • 120 dias a 3 anos: 1 ponto por semana
-//   • mais de 3 anos: 1 ponto por mês
-//
-// CUIDADO CRÍTICO (a razão de esta função existir e não um simples slice):
-// `calcularTWR` usa `fluxoAcoesDoDia` de cada ponto para descontar o dinheiro
-// aportado antes de medir o retorno. Se um ponto com aporte for simplesmente
-// APAGADO, esse fluxo some do cálculo e o TWR passa a contar o aporte como
-// valorização de mercado — inflando o retorno permanentemente. Medido em
-// teste: uma poda ingênua (corte simples) sobre 5 anos de série dava TWR de
-// ~2.956% contra os ~57% reais. Por isso, ao condensar vários pontos em um,
-// o fluxo do grupo é SOMADO no ponto que fica. O primeiro ponto da série é a
-// base de comparação e nunca é condensado.
-//
-// TRADE-OFF ACEITO E CONHECIDO: condensar perde a informação de QUAL DIA,
-// dentro da semana/mês agregado, o aporte entrou — o TWR resultante trata o
-// fluxo como se tivesse ocorrido na fronteira do intervalo. Em teste de 5
-// anos isso deslocou o TWR de 57,1% para 61,8%. Não é viés sistemático (com
-// fluxo na fronteira do grupo o resultado é idêntico), é ruído de resolução,
-// e afeta apenas períodos com mais de 120 dias — os últimos 120 dias mantêm
-// precisão diária exata. É o preço de manter o histórico dentro do limite da
-// célula; a alternativa (série completa) estoura a planilha em ~1 ano de uso
-// diário e aí não haveria TWR nenhum.
-function podarSerieValorCarteira(obj){
-  const s = obj && obj.serieValorCarteira;
-  if(!Array.isArray(s) || s.length < 3) return obj;
-
-  const hojeMs = new Date(hoje()+'T00:00:00').getTime();
-  const DIA = 24*60*60*1000;
-
-  function chave(p, indice){
-    if(indice === 0) return '__primeiro__';           // base do TWR, sempre preservada
-    const t = new Date(p.data+'T00:00:00').getTime();
-    const idade = (hojeMs - t) / DIA;
-    if(idade <= 120) return 'd:'+p.data;              // diário (recente)
-    if(idade <= 365*3) return 'w:'+Math.floor(t/(7*DIA));   // semanal
-    const d = new Date(t);
-    return 'm:'+d.getFullYear()+'-'+d.getMonth();     // mensal (antigo)
-  }
-
-  // Agrupa preservando a ordem; de cada grupo fica o ponto MAIS RECENTE,
-  // carregando a soma dos fluxos de todos os pontos do grupo.
-  const saida = [];
-  let chaveGrupo = null;
-  for(let i=0;i<s.length;i++){
-    const p = s[i];
-    const k = chave(p, i);
-    if(k !== chaveGrupo){
-      saida.push(Object.assign({}, p));
-      chaveGrupo = k;
-    } else {
-      const anterior = saida[saida.length-1];
-      const fluxoSomado = (anterior.fluxoAcoesDoDia || 0) + (p.fluxoAcoesDoDia || 0);
-      // o ponto mais recente do grupo prevalece (valores de mercado atuais),
-      // mas com o fluxo acumulado de todo o grupo
-      saida[saida.length-1] = Object.assign({}, p, { fluxoAcoesDoDia: fluxoSomado });
-    }
-  }
-
-  obj.serieValorCarteira = saida;
-  return obj;
-}
-
 function calcularTWR(){
-  const s = estado.serieValorCarteira;
+  // Pontos incompletos (posição sem preço) ficam de fora.
+  const s = estado.serieValorCarteira.filter(p=>!p.incompleto);
   if(s.length < 2) return null;
   let acumulado = 1, houvePeriodoValido = false;
   for(let i=1;i<s.length;i++){
     const vAnt = s[i-1].valorAcoes;
-    const fluxo = s[i].fluxoAcoesDoDia || 0;
-    let r;
-    if(vAnt > 0){
-      r = (s[i].valorAcoes - fluxo) / vAnt - 1;
-    } else if(fluxo > 0){
-      /* Carteira NASCE (ou renasce depois de zerar) neste ponto. A versão
-         anterior descartava o subperíodo inteiro quando o patrimônio anterior
-         era zero, e com ele ia embora a diferença entre o preço que você pagou
-         e o preço de referência do dia — execução mais corretagem. O TWR
-         passava a medir a partir de uma base que ninguém desembolsou.
-         Medido no caso real de 18/08/2026: pago R$ 2.466,19, fotografia do
-         mesmo dia em R$ 2.450,05; o TWR começava 0,62% acima do que deveria e
-         carregava esse ganho fantasma para sempre. A base correta aqui é o
-         dinheiro que entrou nas ações. */
-      r = s[i].valorAcoes / fluxo - 1;
-    } else {
-      continue;                                // sem patrimônio e sem fluxo: nada a medir
+    if(vAnt <= 0) continue;                    // 4.5: subperíodo ignorado se V anterior = 0
+    const dIni = s[i-1].data, dFim = s[i].data;
+    const dias = diffDias(dIni, dFim);
+    // Fluxos de TODOS os lotes entre os dois pontos, pela data do lote — e não
+    // só os do dia do ponto. Lançamentos retroativos e pontos ignorados deixam
+    // intervalos longos, e o fluxo desse intervalo não pode se perder.
+    // Cada fluxo é ponderado pelo tempo em que o capital ficou investido
+    // (Dietz modificado); com fluxo no último dia equivale à fórmula simples.
+    let F = 0, pond = 0;
+    for(const l of estado.lotes){
+      if(l.data > dIni && l.data <= dFim){
+        const f = l.tipo==='compra'
+          ? (l.quantidade*l.precoUnitario + l.custos)
+          : -(l.quantidade*l.precoUnitario - l.custos);
+        F += f;
+        pond += f * (dias>0 ? diffDias(l.data, dFim)/dias : 0);
+      }
     }
+    const base = vAnt + pond;
+    if(base <= 0) continue;
+    const r = (s[i].valorAcoes - vAnt - F) / base;
     if(!isFinite(r)) continue;
     acumulado *= (1+r);
     houvePeriodoValido = true;
@@ -1322,66 +1023,15 @@ function numBR(s){
   if(s===undefined||s===null) return null;
   s = String(s).trim();
   if(s==='' || /^#/.test(s)) return null;
-  // Remove "R$" e espaços (várias colunas do oceans14 vêm como "R$ 7,21",
-  // "-R$ 0,40"). O sinal de menos, se houver, precisa sobreviver — então
-  // tiro só o "r$" e espaços, preservando o resto. Achado em 18/08/2026:
-  // sem isso, LPA/VPA do oceans14 viravam null e o Preço Justo de Graham
-  // não calculava para nenhuma empresa dessa fonte.
-  s = s.replace(/r\$/ig, '').replace(/\s/g, '');
   s = s.replace(/\./g,'').replace(',', '.');
   const v = parseFloat(s);
   return isNaN(v) ? null : v;
 }
 
-// Interpreta valores monetários que podem vir por extenso, como o oceans14
-// escreve o volume diário ("R$ 431 milhões", "R$ 17 mil", "R$ 0"). Também
-// aceita o formato cru do StatusInvest ("476.551.657,05"). Devolve o valor
-// em reais. Necessário para o piso de liquidez funcionar com as duas fontes
-// (achado de 17/08/2026: numBR devolvia null para "R$ 431 milhões", e o
-// filtro de liquidez deixava passar em vez de barrar).
-function numMonetarioExtenso(s){
-  if(s===undefined||s===null) return null;
-  let t = String(s).trim().toLowerCase();
-  if(t==='' || /^#/.test(t)) return null;
-  t = t.replace(/r\$/g,'').replace(/\s+/g,' ').trim();
-
-  let mult = 1;
-  if(/bilh/.test(t)) mult = 1e9;
-  else if(/milh/.test(t)) mult = 1e6;
-  else if(/\bmil\b/.test(t)) mult = 1e3;
-
-  // extrai só o número, tolerando separadores brasileiros
-  const m = t.match(/-?[\d.]+(?:,\d+)?/);
-  if(!m) return null;
-  let numero = m[0];
-  if(mult>1){
-    // "431" em "431 milhões" — vírgula vira decimal, ponto é separador de milhar
-    numero = numero.replace(/\./g,'').replace(',', '.');
-  } else {
-    // formato cru "476.551.657,05" — ponto é milhar, vírgula é decimal
-    numero = numero.replace(/\./g,'').replace(',', '.');
-  }
-  const v = parseFloat(numero);
-  return isNaN(v) ? null : v*mult;
-}
-
-function normalizarNomeColuna(s){
-  return s.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // remove acentos
-    .replace(/[.\s]/g,'');                              // remove espaços e pontos
-}
-
 function localizarColuna(cabecalho, candidatos){
-  // Normaliza espaços/pontos/acentos ANTES de comparar — cabeçalhos reais
-  // variam nisso entre fontes (ex.: "DIV. LIQ. / PATRI." tem espaço nos dois
-  // lados da barra; um candidato sem esse espaço não batia por causa disso,
-  // não por a coluna não existir. Achado em 05/08/2026: fazia o critério de
-  // dívida do escore de qualidade falhar para os 164 candidatos de um CSV
-  // real, silenciosamente — nenhum "erro", só sempre "sem dado".
-  const normalizado = cabecalho.map(c=>normalizarNomeColuna(c));
+  const lower = cabecalho.map(c=>c.toLowerCase().trim());
   for(const cand of candidatos){
-    const candNorm = normalizarNomeColuna(cand);
-    const i = normalizado.findIndex(c=>c.includes(candNorm));
+    const i = lower.findIndex(c=>c.includes(cand));
     if(i>=0) return i;
   }
   return -1;
@@ -1395,8 +1045,6 @@ function importarCSVPrecos(texto){
   const iPreco = localizarColuna(cab, ['preco','preço','price','cotação','cotacao']);
   const iMax = localizarColuna(cab, ['max52','máxima','maxima','high52']);
   const iMin = localizarColuna(cab, ['min52','mínima','minima','low52']);
-  const iMM50 = localizarColuna(cab, ['mm50','media movel 50','média móvel 50']);
-  const iMM200 = localizarColuna(cab, ['mm200','media movel 200','média móvel 200']);
   if(iTicker<0 || iPreco<0){
     return { ok:false, msg:'Não encontrei colunas de Ticker e Preço no cabeçalho: '+cab.join(' | ') };
   }
@@ -1409,10 +1057,8 @@ function importarCSVPrecos(texto){
     const preco = numBR(l[iPreco]);
     const max52 = iMax>=0 ? numBR(l[iMax]) : null;
     const min52 = iMin>=0 ? numBR(l[iMin]) : null;
-    const mm50 = iMM50>=0 ? numBR(l[iMM50]) : null;
-    const mm200 = iMM200>=0 ? numBR(l[iMM200]) : null;
 
-    if(!estado.precos[ticker]) estado.precos[ticker] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, mm50:null, mm200:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+    if(!estado.precos[ticker]) estado.precos[ticker] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
     const info = estado.precos[ticker];
 
     if(preco!==null){
@@ -1432,8 +1078,6 @@ function importarCSVPrecos(texto){
     }
     if(max52!==null) info.maxima52 = max52;
     if(min52!==null) info.minima52 = min52;
-    if(mm50!==null) info.mm50 = mm50;
-    if(mm200!==null) info.mm200 = mm200;
   }
   registrarSnapshotValor();
   salvarEstado();
@@ -1453,34 +1097,6 @@ function raizTicker(ticker){
   return ticker.replace(/\d+$/, '');
 }
 
-function setorDoTicker(ticker){
-  return estado.mapaSetores[raizTicker(ticker.toUpperCase().trim())] || null;
-}
-
-// Exposição atual por setor, calculada sobre as posições ABERTAS (não
-// encerradas), usando o campo "setor" gravado em cada posição — que por sua
-// vez é preenchido a partir de setorDoTicker() quando conhecido, ou digitado
-// à mão. Reaproveitada pelo alerta do painel e pelo aviso preventivo na
-// compra (seção 05/08/2026: mover a checagem de concentração para ANTES da
-// compra, comparando contra o que já está na carteira — não contra o
-// ranking do mês, que não sabe o que você já possui).
-function exposicaoPorSetor(){
-  const calc = todasPosicoesCalculadas();
-  // Fallback para custo investido quando ainda não há preço de mercado
-  // sincronizado (achado em teste, 05/08/2026): sem isso, uma posição recém
-  // comprada conta como 0 na exposição por setor até você atualizar o
-  // preço, escondendo concentração real logo depois da compra — exatamente
-  // quando o aviso mais precisa funcionar.
-  const valorDe = c => c.valorMercado!==null ? c.valorMercado : c.custoOriginal;
-  const valorAcoes = calc.reduce((s,c)=> s + (c.pos.status!=='encerrada' ? valorDe(c) : 0), 0);
-  const porSetor = {};
-  for(const c of calc){
-    if(c.pos.status==='encerrada' || !c.pos.setor) continue;
-    porSetor[c.pos.setor] = (porSetor[c.pos.setor]||0) + valorDe(c);
-  }
-  return { valorAcoes, porSetor };
-}
-
 function processarRanking(texto, criterio){
   criterio = criterio || 'evebit_roic';
   const linhas = parseCSV(texto);
@@ -1493,32 +1109,10 @@ function processarRanking(texto, criterio){
   const iPvp    = localizarColuna(cab, ['p/vp','p / vp']);
   const iVpa    = localizarColuna(cab, ['vpa']);
   const iRoe    = localizarColuna(cab, ['roe']);
-  // Piso de liquidez: StatusInvest chama "Liquidez Media Diaria"; oceans14
-  // chama "Volume Diário". Reconhecer os dois é o que impede o filtro de
-  // segurança de falhar silenciosamente (achado de 17/08/2026: com o CSV do
-  // oceans14, a coluna não era encontrada e ações ilíquidas passavam sem aviso).
-  const iLiq    = localizarColuna(cab, ['liquidez media diaria','liquidez média diária','liq.2meses','liq. 2 meses','volume diario','volume diário']);
-  const iDy     = localizarColuna(cab, ['dy','div.yield','dividend yield','div. yield']);
+  const iLiq    = localizarColuna(cab, ['liquidez media diaria','liquidez média diária','liq.2meses','liq. 2 meses']);
+  const iDy     = localizarColuna(cab, ['dy','div.yield','dividend yield']);
   const iPl     = localizarColuna(cab, ['p/l','p / l']);
-  const iPreco  = localizarColuna(cab, ['preco','preço','price','cotação','cotacao']);
-  // Colunas do escore parcial de qualidade — seção "Alavanca 4" da análise
-  // de 05/08/2026. Informativo, nunca entra na soma do ranking nem exclui
-  // candidato; existe para desempate visual entre papéis próximos no ranking.
-  // Cada critério pode vir de fontes diferentes; onde a coluna não existe, o
-  // critério fica "não verificado" (—), distinto de "não atende" (✗).
-  const iRoa       = localizarColuna(cab, ['roa']);
-  // "margem ebit" precisa ser exata: NÃO pode cair em "margem ebitda", que é
-  // outra métrica (EBITDA não desconta depreciação/amortização). Como a busca
-  // é por inclusão, "ebitda" contém "ebit" — então busco o nome mais
-  // específico primeiro e, se pegar o EBITDA por engano, trato como ausente.
-  let iMargemEbit  = localizarColuna(cab, ['margem ebit','marg. ebit','mrg ebit']);
-  if(iMargemEbit>=0 && normalizarNomeColuna(cab[iMargemEbit]).includes('ebitda')) iMargemEbit = -1;
-  const iLiqCorr   = localizarColuna(cab, ['liq. corrente','liquidez corrente','liq corrente']);
-  const iDivPatri  = localizarColuna(cab, ['div. liq./ patri','div liq patri','divida liquida/patrimonio','dív. líq./patri']);
-  const iCagrRec   = localizarColuna(cab, ['cagr receitas 5 anos','cresc. rec.5a','crescimento da receita','cresc. receita','cresc receita']);
-  // LPA para o Preço Justo de Graham (VPA já é lido acima, em iVpa, para o
-  // filtro de patrimônio negativo — reaproveitado aqui)
-  const iLpa       = localizarColuna(cab, ['lpa']);
+  const iPreco  = localizarColuna(cab, ['preco','preço','cotação','cotacao']);
 
   if(iTicker<0 || iEvEbit<0 || iRoic<0){
     return { ok:false, msg:'Não encontrei colunas de Ticker, EV/EBIT e ROIC no cabeçalho: '+cab.join(' | ') };
@@ -1533,8 +1127,7 @@ function processarRanking(texto, criterio){
 
   const excluidos = { 'EV/EBIT ou ROIC ausente/≤0':[], 'financeira':[], 'patrimônio líquido negativo (P/VP ou VPA ≤ 0)':[],
                        'ROE < -50% (situação crítica)':[], 'recuperação judicial / exclusão manual':[],
-                       'liquidez abaixo do piso':[], 'liquidez não confirmada (coluna ausente na fonte)':[],
-                       'liquidez não confirmada (valor ilegível)':[], 'classe duplicada (mantida a mais líquida)':[] };
+                       'liquidez abaixo do piso':[], 'classe duplicada (mantida a mais líquida)':[] };
   let candidatos = [];
 
   for(let i=1;i<linhas.length;i++){
@@ -1546,7 +1139,7 @@ function processarRanking(texto, criterio){
     const pvp    = iPvp>=0 ? numBR(l[iPvp]) : null;
     const vpa    = iVpa>=0 ? numBR(l[iVpa]) : null;
     const roe    = iRoe>=0 ? numBR(l[iRoe]) : null;
-    const liq    = iLiq>=0 ? numMonetarioExtenso(l[iLiq]) : null;
+    const liq    = iLiq>=0 ? numBR(l[iLiq]) : null;
     const dy     = iDy>=0 ? numBR(l[iDy]) : null;
 
     if(evEbit===null || roic===null || evEbit<=0 || roic<=0){ excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue; }
@@ -1554,17 +1147,7 @@ function processarRanking(texto, criterio){
     if((pvp!==null && pvp<=0) || (vpa!==null && vpa<=0)){ excluidos['patrimônio líquido negativo (P/VP ou VPA ≤ 0)'].push(ticker); continue; }
     if(roe!==null && roe < -50){ excluidos['ROE < -50% (situação crítica)'].push(ticker); continue; }
     if(recJudicial.has(ticker)){ excluidos['recuperação judicial / exclusão manual'].push(ticker); continue; }
-    // Piso de liquidez, fail-closed (parecer externo + achado de 17/08/2026):
-    // o filtro de segurança recusa por padrão quando NÃO consegue confirmar
-    // liquidez — coluna ausente na fonte, ou valor ilegível. Antes, sem a
-    // coluna, o papel passava; com o CSV do oceans14 isso deixava ações
-    // ilíquidas entrarem sem aviso. Melhor barrar um papel bom por falta de
-    // dado (o usuário edita a lista/piso) do que comprar um ilíquido às cegas.
-    if(pisoLiq > 0){
-      if(iLiq < 0){ excluidos['liquidez não confirmada (coluna ausente na fonte)'].push(ticker); continue; }
-      if(liq === null){ excluidos['liquidez não confirmada (valor ilegível)'].push(ticker); continue; }
-      if(liq < pisoLiq){ excluidos['liquidez abaixo do piso'].push(ticker); continue; }
-    }
+    if(liq!==null && liq < pisoLiq){ excluidos['liquidez abaixo do piso'].push(ticker); continue; }
 
     const pl = iPl>=0 ? numBR(l[iPl]) : null;
     const precoAtualCsv = iPreco>=0 ? numBR(l[iPreco]) : null;
@@ -1572,43 +1155,7 @@ function processarRanking(texto, criterio){
     if(criterio==='pl_roe' && (pl===null || pl<=0 || roe===null || roe<=0)){
       excluidos['EV/EBIT ou ROIC ausente/≤0'].push(ticker); continue;
     }
-
-    // Escore parcial de qualidade, informativo — nunca filtra nem entra na
-    // soma do ranking. Agora distingue TRÊS estados por critério (parecer
-    // externo, 17/08/2026): atende (✓), não atende (✗) e NÃO VERIFICADO (—),
-    // este último quando a coluna não existe na fonte. Antes, coluna ausente
-    // virava ✗ silenciosamente — foi o que fez todo papel do oceans14 dar
-    // 2/5, escondendo que 3 critérios não tinham dado nenhum. O escore agora
-    // é "X/Y verificados", não "X/5" cego.
-    const roa      = iRoa>=0 ? numBR(l[iRoa]) : null;
-    const margEbit = iMargemEbit>=0 ? numBR(l[iMargemEbit]) : null;
-    const liqCorr  = iLiqCorr>=0 ? numBR(l[iLiqCorr]) : null;
-    const divPatri = iDivPatri>=0 ? numBR(l[iDivPatri]) : null;
-    const cagrRec  = iCagrRec>=0 ? numBR(l[iCagrRec]) : null;
-    const criterios = [
-      { nome:'ROA positivo', verificavel: iRoa>=0, ok: roa!==null && roa>0 },
-      { nome:'Margem EBIT positiva', verificavel: iMargemEbit>=0, ok: margEbit!==null && margEbit>0 },
-      { nome:'Liquidez corrente > 1', verificavel: iLiqCorr>=0, ok: liqCorr!==null && liqCorr>1 },
-      { nome:'Dívida líq./patrimônio abaixo do teto', verificavel: iDivPatri>=0, ok: divPatri!==null && divPatri < estado.config.escoreDividaMaxima },
-      { nome:'Crescimento de receita 5a positivo', verificavel: iCagrRec>=0, ok: cagrRec!==null && cagrRec>0 }
-    ];
-    const verificaveis = criterios.filter(c=>c.verificavel);
-    const escoreQualidade = verificaveis.filter(c=>c.ok).length;
-    const escoreTotal = verificaveis.length;   // quantos critérios a fonte permite checar
-    const escoreDetalhe = criterios.map(c=> c.verificavel ? `${c.ok?'✓':'✗'} ${c.nome}` : `— ${c.nome} (sem dado na fonte)`).join(' · ');
-
-    // Preço Justo de Graham = √(22,5 × LPA × VPA). Informativo, nunca filtra.
-    // Só é definido com LPA e VPA ambos positivos: LPA negativo é prejuízo,
-    // VPA negativo é patrimônio negativo — em qualquer dos dois a raiz seria
-    // de número negativo (indefinida). Nesses casos fica null e a coluna
-    // mostra "—". Também exige a coluna existir na fonte.
-    const lpa = iLpa>=0 ? numBR(l[iLpa]) : null;
-    let precoJustoGraham = null;
-    if(lpa!==null && vpa!==null && lpa>0 && vpa>0){
-      precoJustoGraham = Math.sqrt(22.5 * lpa * vpa);
-    }
-
-    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv, escoreQualidade, escoreTotal, escoreDetalhe, precoJustoGraham });
+    candidatos.push({ ticker, evEbit, roic, pl, roe, liq: liq||0, dy, preco: precoAtualCsv });
   }
 
   // deduplicação por raiz, mantendo a classe mais líquida (memorial 5.1, regra 8)
@@ -1672,171 +1219,9 @@ function render(){
   renderHistorico();
   renderMapaTitulos();
   renderStatusBackup();
-  renderStatusTamanhoEstado();
-}
-
-/* ==========================================================================
-   PAINEL DE DISCIPLINA/ADERÊNCIA
-   A maior fonte de perda de retorno em estratégias de valor não é a seleção
-   de ações, é abandonar o plano no ano ruim (análise de 05/08/2026). Este
-   painel não julga nem bloqueia nada — só mantém visível o horizonte
-   declarado e a regularidade dos aportes, e lembra a expectativa calibrada
-   quando a carteira está no negativo pela métrica comparável ao índice.
-   ========================================================================== */
-
-function primeiroAporte(){
-  const datasFluxo = estado.fluxosExternos.filter(f=>f.tipo==='aporte').map(f=>f.data);
-  const datasCompra = estado.lotes.filter(l=>l.tipo==='compra').map(l=>l.data);
-  const todas = datasFluxo.concat(datasCompra);
-  if(todas.length===0) return null;
-  return todas.sort()[0];
-}
-
-function mesesEntre(d1,d2){
-  const a = new Date(d1+'T00:00:00'), b = new Date(d2+'T00:00:00');
-  return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
-}
-
-function mesesComAporte(){
-  return new Set(estado.fluxosExternos.filter(f=>f.tipo==='aporte').map(f=>f.data.slice(0,7)));
-}
-
-// Decomposição do patrimônio por origem (19/08/2026). Responde à pergunta
-// "quanto é meu dinheiro, quanto a empresa me pagou, quanto foi o mercado".
-// O Caixa não serve para isso: mostra saldo momentâneo e zera a cada compra,
-// então proventos reinvestidos sumiriam de vista. Aqui os proventos são
-// ACUMULADO HISTÓRICO — continuam contados depois de reinvestidos.
-// Semeia o IBOV num ponto passado da série. Necessário porque o
-// GOOGLEFINANCE só devolve a cotação atual — pontos já gravados ficaram com
-// ibov nulo, e sem pelo menos dois pontos com índice não há comparação.
-document.getElementById('formIbovHistorico').addEventListener('submit', (e)=>{
-  e.preventDefault();
-  const data = document.getElementById('ibovData').value;
-  const valor = parseFloat(document.getElementById('ibovValor').value);
-  const div = document.getElementById('resultadoIbov');
-  if(!data || !isFinite(valor) || valor<=0){
-    div.innerHTML = '<div class="alerta critico">Informe uma data e um valor válidos.</div>';
-    return;
-  }
-
-  const ponto = estado.serieValorCarteira.find(p=>p.data===data);
-  if(ponto){
-    ponto.ibov = valor;
-    div.innerHTML = `<div class="alerta">IBOV de ${fmtData(data)} gravado (${valor.toLocaleString('pt-BR')} pontos) no ponto já existente do histórico.</div>`;
-  } else if(estado.serieValorCarteira.length===0){
-    div.innerHTML = '<div class="alerta critico">O histórico ainda está vazio. Lance ao menos uma compra ou aporte antes de semear o índice.</div>';
-    return;
-  } else {
-    // Não existe ponto exatamente nessa data. Cria um, herdando o valor
-    // patrimonial do ponto imediatamente anterior — ou, se a data for
-    // ANTERIOR a todo o histórico, do primeiro ponto (é o caso comum: semear
-    // o índice na data do primeiro aporte, cuja fotografia foi gravada num
-    // dia posterior).
-    const ordenada = [...estado.serieValorCarteira].sort((a,b)=> a.data<b.data?-1:1);
-    const anteriores = ordenada.filter(p=>p.data <= data);
-    const base = anteriores.length ? anteriores[anteriores.length-1] : ordenada[0];
-    const ehAnteriorATudo = anteriores.length===0;
-    estado.serieValorCarteira.push({
-      data,
-      valorAcoes: base.valorAcoes,
-      valorCaixa: base.valorCaixa,
-      // Se o ponto novo passa a ser o PRIMEIRO da série, ele vira a base do
-      // TWR e não pode carregar fluxo (senão o primeiro subperíodo desconta
-      // um aporte que, na nova ordenação, ainda não tinha acontecido).
-      fluxoAcoesDoDia: 0,
-      ibov: valor
-    });
-    estado.serieValorCarteira.sort((a,b)=> a.data<b.data?-1:1);
-    div.innerHTML = `<div class="alerta">Ponto criado em ${fmtData(data)} com o IBOV em ${valor.toLocaleString('pt-BR')} pontos` +
-      (ehAnteriorATudo ? ', como novo início do histórico.' : '.') + '</div>';
-  }
-
-  // registra também como cotação corrente do índice, para as próximas
-  // fotografias herdarem enquanto a sincronização automática não estiver ativa
-  if(!estado.precos['IBOV']) estado.precos['IBOV'] = { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, mm50:null, mm200:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
-  if(!estado.precos['IBOV'].dataUltimoValido || estado.precos['IBOV'].dataUltimoValido <= data){
-    estado.precos['IBOV'].ultimoValido = valor;
-    estado.precos['IBOV'].dataUltimoValido = data;
-  }
-
-  salvarEstado();
-  render();
-});
-
-function renderDecomposicao(){
-  const aportado = estado.fluxosExternos.reduce((s,f)=> s + (f.tipo==='aporte' ? f.valor : -f.valor), 0);
-  const proventos = estado.proventos.reduce((s,pv)=> s + ((pv.valorBruto||0) - (pv.irRetido||0)), 0);
-  const calc = todasPosicoesCalculadas();
-  const valorAcoes = calc.reduce((s,c)=> s + (c.valorMercado||0), 0);
-  const patrimonio = valorAcoes + (estado.caixa.saldo||0);
-  // Valorização = o que sobrou depois de tirar o que você pôs e o que as
-  // empresas pagaram. Custos de corretagem já estão embutidos (saíram do caixa).
-  const valorizacao = patrimonio - aportado - proventos;
-
-  const el = id => document.getElementById(id);
-  el('pDecAportado').textContent = fmtMoeda(aportado);
-  el('pDecProventos').textContent = fmtMoeda(proventos);
-  el('pDecValorizacao').textContent = fmtMoeda(valorizacao);
-  el('pDecValorizacao').className = 'val num ' + classeSinal(valorizacao);
-  el('pDecTotal').textContent = fmtMoeda(patrimonio);
-
-  const nProv = estado.proventos.length;
-  el('pDecProventosObs').textContent = nProv===0
-    ? 'nenhum provento lançado ainda'
-    : `${nProv} lançamento(s), líquidos de IR`;
-
-  if(aportado > 0){
-    const ganho = proventos + valorizacao;
-    const pct = ganho/aportado*100;
-    el('pDecTotalObs').innerHTML = `resultado sobre o aportado: <span class="${classeSinal(ganho)}">${ganho>=0?'+':''}${fmtMoeda(ganho)} (${pct>=0?'+':''}${pct.toFixed(1)}%)</span>`;
-  } else {
-    el('pDecTotalObs').textContent = '';
-  }
-}
-
-function renderDisciplina(){
-  const cont = document.getElementById('painelDisciplina');
-  const inicio = primeiroAporte();
-
-  if(!inicio){
-    cont.innerHTML = '<div class="msg-vazio">Sem aportes registrados ainda — o painel aparece a partir do primeiro.</div>';
-    return;
-  }
-
-  const horizonteMeses = estado.config.horizonteAnos * 12;
-  const decorridos = Math.max(0, mesesEntre(inicio, hoje()));
-  const pctHorizonte = Math.min(1, horizonteMeses>0 ? decorridos/horizonteMeses : 0);
-
-  const totalMesesJanela = Math.max(1, decorridos+1);
-  const mesesAportados = mesesComAporte().size;
-  const aderencia = Math.min(1, mesesAportados/totalMesesJanela);
-
-  let html = `<div class="grid-paineis">
-    <div class="card painel-item"><div class="rot">Horizonte declarado</div>
-      <div class="val num">${decorridos} / ${horizonteMeses} meses</div>
-      <div class="obs">${(pctHorizonte*100).toFixed(0)}% de um plano de ${estado.config.horizonteAnos} anos, desde ${fmtData(inicio)}</div></div>
-    <div class="card painel-item"><div class="rot">Aderência de aportes</div>
-      <div class="val num">${(aderencia*100).toFixed(0)}%</div>
-      <div class="obs">${mesesAportados} de ${totalMesesJanela} meses com aporte registrado</div></div>
-  </div>`;
-
-  const twr = calcularTWR();
-  if(twr !== null && twr < 0){
-    html += `<div class="alerta" style="margin-top:10px">
-      A carteira está no negativo pela TWR (comparável ao índice). Isso é esperado dentro do método —
-      historicamente a fórmula mágica perde do mercado em cerca de 1 a cada 4 anos, às vezes por margem
-      larga. O horizonte declarado é de ${estado.config.horizonteAnos} anos: um ano isolado não é o teste
-      da estratégia. O erro mais caro nesse momento costuma ser abandonar o plano, não a ação escolhida.
-    </div>`;
-  }
-
-  cont.innerHTML = html;
 }
 
 function renderPainel(){
-  renderDecomposicao();
-  renderDisciplina();
-
   const calc = todasPosicoesCalculadas();
   const valorAcoes = calc.reduce((s,c)=> s+(c.valorMercado||0), 0);
   const valorTotal = valorAcoes + (estado.caixa.saldo||0);
@@ -1914,13 +1299,15 @@ function renderPainel(){
       alertas.push({tipo:'atencao', txt:`${ticker}: preço desatualizado desde ${fmtData(info.dataUltimoValido)}.`});
     }
   }
-  // teto de setor — usa valorAcoes E porSetor do MESMO cálculo (ambos com
-  // fallback de custo quando não há preço de mercado), para não dividir um
-  // numerador que conta posições sem preço por um denominador que não conta.
-  const expSetor = exposicaoPorSetor();
-  if(expSetor.valorAcoes>0){
-    for(const [setor,v] of Object.entries(expSetor.porSetor)){
-      const pct = v/expSetor.valorAcoes*100;
+  // teto de setor
+  const porSetor = {};
+  for(const c of calc){
+    if(c.pos.status==='encerrada' || !c.pos.setor) continue;
+    porSetor[c.pos.setor] = (porSetor[c.pos.setor]||0) + (c.valorMercado||0);
+  }
+  if(valorAcoes>0){
+    for(const [setor,v] of Object.entries(porSetor)){
+      const pct = v/valorAcoes*100;
       if(pct > estado.config.tetoSetorPercentual){
         alertas.push({tipo:'atencao', txt:`Setor "${setor}" representa ${pct.toFixed(1)}% da carteira, acima do teto de ${estado.config.tetoSetorPercentual}%.`});
       }
@@ -1943,7 +1330,7 @@ function renderPainel(){
 
 function renderGrafico(){
   const cont = document.getElementById('containerGrafico');
-  const s = estado.serieValorCarteira;
+  const s = estado.serieValorCarteira.filter(p=>!p.incompleto);
 
   if(s.length < 2){
     cont.innerHTML = `<div class="msg-vazio">
@@ -1979,10 +1366,16 @@ function renderGrafico(){
   const pad = (vMax - vMin) * 0.12;
   vMin -= pad; vMax += pad;
 
-  const x = i => L + (s.length===1 ? iw/2 : (i/(s.length-1))*iw);
+  const tMs = d => new Date(d+'T00:00:00').getTime();
+  const t0 = tMs(s[0].data), t1 = tMs(s[s.length-1].data);
+  const x = i => L + (t1===t0 ? iw/2 : ((tMs(s[i].data)-t0)/(t1-t0))*iw);
   const y = v => T + ih - ((v - vMin)/(vMax - vMin))*ih;
 
   const linha = arr => arr.map((v,i)=> `${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  // aporte é um degrau (o dinheiro entra num dia), não uma rampa entre fotos
+  const degrau = arr => arr.map((v,i)=> i===0
+    ? `M${x(0).toFixed(1)},${y(v).toFixed(1)}`
+    : `L${x(i).toFixed(1)},${y(arr[i-1]).toFixed(1)} L${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const area = arr => linha(arr) + ` L${x(arr.length-1).toFixed(1)},${(T+ih).toFixed(1)} L${x(0).toFixed(1)},${(T+ih).toFixed(1)} Z`;
 
   // linhas de grade horizontais
@@ -1996,12 +1389,13 @@ function renderGrafico(){
       v.toLocaleString('pt-BR',{maximumFractionDigits:0})}</text>`;
   }
 
-  // rótulos de data (primeiro, meio, último)
-  const idxRotulos = s.length<=3 ? s.map((_,i)=>i) : [0, Math.floor((s.length-1)/2), s.length-1];
+  // rótulos de data: início, meio e fim do período (proporcionais ao tempo)
   let rotulosX = '';
-  for(const i of idxRotulos){
-    rotulosX += `<text x="${x(i).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="10" fill="var(--sub)" font-family="ui-monospace,monospace">${fmtData(s[i].data)}</text>`;
-  }
+  [0, 0.5, 1].forEach((f,k)=>{
+    const dt = new Date(t0 + (t1-t0)*f);
+    const ancora = k===0 ? 'start' : (k===2 ? 'end' : 'middle');
+    rotulosX += `<text x="${(L + iw*f).toFixed(1)}" y="${H-12}" text-anchor="${ancora}" font-size="10" fill="var(--sub)" font-family="ui-monospace,monospace">${fmtData(isoLocal(dt))}</text>`;
+  });
 
   const ultimoPat = patrimonio[patrimonio.length-1];
   const ultimoInv = investido[investido.length-1];
@@ -2011,7 +1405,7 @@ function renderGrafico(){
     <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:100%">
       ${grade}
       <path d="${area(patrimonio)}" fill="var(--ok)" opacity="0.10"/>
-      <path d="${linha(investido)}" fill="none" stroke="var(--sub)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <path d="${degrau(investido)}" fill="none" stroke="var(--sub)" stroke-width="1.5" stroke-dasharray="4 3"/>
       <path d="${linha(patrimonio)}" fill="none" stroke="var(--tinta)" stroke-width="2"/>
       ${patrimonio.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="var(--tinta)"/>`).join('')}
       ${rotulosX}
@@ -2038,14 +1432,6 @@ function renderPosicoes(){
 
   for(const c of calc){
     const distTxt = c.distMax!==null ? `${fmtPct(c.distMax,0)} da máx · ${c.distMin!==null?fmtPct(c.distMin,0):'—'} da mín` : '—';
-    const tendTxt = (()=>{
-      const info = c.infoPreco;
-      if(!info || (!info.mm50 && !info.mm200) || c.precoAtual===null) return '—';
-      const partes = [];
-      if(info.mm50) partes.push(`MM50 ${fmtMoeda(info.mm50)}${c.precoAtual<info.mm50?' <span class="badge-desl">abaixo</span>':''}`);
-      if(info.mm200) partes.push(`MM200 ${fmtMoeda(info.mm200)}${c.precoAtual<info.mm200?' <span class="badge-desl">abaixo</span>':''}`);
-      return partes.join(' · ');
-    })();
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${c.pos.ticker}${c.infoPreco&&c.infoPreco.suspeitaDeslistagem?' <span class="badge-desl">deslistagem?</span>':''}</td>
@@ -2060,8 +1446,7 @@ function renderPosicoes(){
       <td>${fmtData(c.pos.dataAbertura)}</td>
       <td>${fmtData(c.aniversario)}</td>
       <td>${distTxt}</td>
-      <td>${tendTxt}</td>
-      <td>${c.pos.status==='incompleta'?`<button class="acao pequeno secundario" data-completar="${c.pos.id}">Completar</button> <button class="acao pequeno secundario" data-marcar-completa="${c.pos.id}" title="Encerra a janela de complementação: a posição passa a contar como completa, sem esperar os 3 meses.">Já está completa</button>`:''}</td>`;
+      <td>${c.pos.status==='incompleta'?`<button class="acao pequeno secundario" data-completar="${c.pos.id}">Completar</button>`:''}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -2075,22 +1460,6 @@ function renderPosicoes(){
       mudarTela('lancamentos');
       mudarSubTela('compra');
       mostrarSugestaoAlocacao();
-    });
-  });
-
-  // "Já está completa": encerra a janela de complementação sem esperar os 3
-  // meses. O status 'incompleta' nasce por padrão em toda compra nova e só
-  // expirava sozinho no fim da janela — não havia como declarar que a posição
-  // já tem o tamanho pretendido (pedido do usuário, 19/08/2026).
-  tbody.querySelectorAll('[data-marcar-completa]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const pos = estado.posicoes.find(p=>p.id===btn.dataset.marcarCompleta);
-      if(!pos) return;
-      if(!confirm(`Marcar ${pos.ticker} como completa? A posição deixa de aparecer como "incompleta" e sai da fila de complementação sugerida nas próximas compras. Você ainda pode comprar mais desse papel normalmente — isso só encerra a janela de complementação.`)) return;
-      pos.status = 'completa';
-      pos.dataFimJanelaComplementacao = hoje();   // fecha a janela na data de hoje
-      salvarEstado();
-      render();
     });
   });
 }
@@ -2128,43 +1497,20 @@ function renderConfig(){
     ['limiteIsencaoMensal','Limite de isenção mensal de IR (R$)'],
     ['aliquotaGanho','Alíquota sobre ganho (ex.: 0.15)'],
     ['tetoSetorPercentual','Teto por setor (%)'],
-    ['falhasParaSuspeitaDeslistagem','Falhas consecutivas p/ suspeita de deslistagem'],
-    ['horizonteAnos','Horizonte declarado do plano (anos)'],
-    ['escoreDividaMaxima','Teto de dívida líq./patrimônio p/ escore de qualidade']
+    ['falhasParaSuspeitaDeslistagem','Falhas consecutivas p/ suspeita de deslistagem']
   ];
   const cont = document.getElementById('listaConfig');
   cont.innerHTML='';
   for(const [chave,rotulo] of campos){
     const linha = document.createElement('div');
     linha.className='config-linha';
-    linha.innerHTML = `<label>${rotulo}</label><input type="number" step="any" data-config="${chave}" value="${estado.config[chave]}">`;
+    linha.innerHTML = `<label>${rotulo}</label><input type="number" step="any" data-config="${chave}" value="${estado.config[chave]}">
+      <span class="verif">verificado 04/08/2026</span>`;
     cont.appendChild(linha);
   }
-
-  // Data de verificação dos parâmetros fiscais — campo de data, não numérico.
-  // O selo "verificado 04/08/2026" que existia aqui estava FIXO NO CÓDIGO e
-  // se repetia em todos os parâmetros, afirmando verificação inclusive para
-  // valores que o usuário alterou depois (apontado em parecer externo,
-  // 07/08/2026). Removido: agora só existe esta data, que é editável e
-  // efetivamente usada pelo aviso do painel de limite mensal.
-  const linhaData = document.createElement('div');
-  linhaData.className='config-linha';
-  linhaData.innerHTML = `<label>Parâmetros fiscais conferidos em</label>
-    <input type="date" data-config-data="dataVerificacaoParametrosFiscais" value="${estado.config.dataVerificacaoParametrosFiscais||''}">`;
-  cont.appendChild(linhaData);
-
   cont.querySelectorAll('[data-config]').forEach(inp=>{
     inp.addEventListener('change', ()=>{
-      const v = parseFloat(inp.value);
-      if(!isFinite(v)){ alert('Valor inválido; a alteração foi descartada.'); renderConfig(); return; }
-      estado.config[inp.dataset.config] = v;
-      salvarEstado();
-      render();
-    });
-  });
-  cont.querySelectorAll('[data-config-data]').forEach(inp=>{
-    inp.addEventListener('change', ()=>{
-      estado.config[inp.dataset.configData] = inp.value;
+      estado.config[inp.dataset.config] = parseFloat(inp.value);
       salvarEstado();
       render();
     });
@@ -2176,60 +1522,6 @@ function renderStatusBackup(){
   const el = document.getElementById('statusBackup');
   el.textContent = data ? `Último backup exportado em ${fmtData(data)}.` : 'Nenhum backup exportado ainda. Exporte agora.';
 }
-
-// Detalhamento do tamanho do estado por seção, para o usuário ver O QUE está
-// ocupando espaço em vez de só o total — inclui campos além de
-// snapshotsRanking porque um estado grande pode ter outra causa (muitos
-// lançamentos, muitas posições) que a poda de ranking não resolve.
-function renderStatusTamanhoEstado(){
-  const el = document.getElementById('statusTamanhoEstado');
-  if(!el) return;
-  const partes = ['posicoes','lotes','eventos','proventos','fluxosExternos','serieValorCarteira','snapshotsRanking','precos','mapaSetores','mapaTitulos'];
-  const tamanhos = partes.map(p => [p, JSON.stringify(estado[p]||{}).length]).sort((a,b)=>b[1]-a[1]);
-  const total = JSON.stringify(estado).length;
-  const linhasSnap = (estado.snapshotsRanking||[]).reduce((s,sn)=>s+(sn.linhas?sn.linhas.length:0), 0);
-
-  const cor = total > 45000 ? 'var(--falha)' : (total > 35000 ? 'var(--atencao)' : 'var(--ok)');
-  el.innerHTML = `Tamanho total: <b style="color:${cor}">${total.toLocaleString('pt-BR')}</b> de 50.000 caracteres.
-    ${estado.snapshotsRanking.length} snapshot(s) de ranking, ${linhasSnap} linhas ao todo.<br>
-    Maiores seções: ${tamanhos.slice(0,4).map(([p,t])=>`${p} (${t.toLocaleString('pt-BR')})`).join(', ')}.`;
-}
-
-document.getElementById('btnLimparSnapshots').addEventListener('click', ()=>{
-  const nSnap = estado.snapshotsRanking.length;
-  const nPrecos = Object.keys(estado.precos||{}).length;
-  const tamAntes = JSON.stringify(estado).length;
-
-  // Quantos preços seriam mantidos (detidos + snapshot atual)?
-  const detidos = new Set();
-  for(const p of estado.posicoes){
-    if(p.status!=='encerrada'){ detidos.add(p.ticker.toUpperCase()); detidos.add(raizTicker(p.ticker.toUpperCase())); }
-  }
-  const nMantidos = Object.keys(estado.precos||{}).filter(tk=>{
-    const T = tk.toUpperCase();
-    return detidos.has(T) || detidos.has(raizTicker(T));
-  }).length;
-  const nDescartaveis = nPrecos - nMantidos;
-
-  if(nSnap===0 && nDescartaveis<=0){
-    alert(`Nada a limpar: ${nSnap} snapshot(s) de ranking e ${nPrecos} preço(s), todos de ativos que você tem em carteira.`);
-    return;
-  }
-  if(!confirm(
-    `Isso libera espaço removendo:\n` +
-    `• ${nSnap} snapshot(s) de histórico de ranking\n` +
-    `• ${nDescartaveis} preço(s) de ativos que você NÃO tem em carteira (mantém os ${nMantidos} das suas posições)\n\n` +
-    `Tudo isso regenera sozinho na próxima importação de ranking/preços. ` +
-    `Suas posições, lançamentos e caixa NÃO são afetados. Confirma?`
-  )) return;
-
-  estado.snapshotsRanking = [];
-  podarEstado(estado);   // remove os preços descartáveis
-  salvarEstado();
-  renderStatusTamanhoEstado();
-  const tamDepois = JSON.stringify(estado).length;
-  alert(`Limpo. Tamanho do estado: ${tamAntes.toLocaleString('pt-BR')} → ${tamDepois.toLocaleString('pt-BR')} caracteres.`);
-});
 
 /* ==========================================================================
    NAVEGAÇÃO
@@ -2262,47 +1554,6 @@ document.getElementById('eTipo').addEventListener('change', (e)=>{
    FORMULÁRIOS
    ========================================================================== */
 
-// Aviso preventivo de concentração por setor — checagem movida para ANTES
-// da compra (05/08/2026), comparando contra o que a carteira JÁ TEM, não
-// contra o ranking do mês. Auto-preenche "Setor" quando o ticker é
-// conhecido no mapa; nunca bloqueia o envio do formulário, só informa.
-function atualizarAvisoConcentracao(){
-  const ticker = document.getElementById('cTicker').value.toUpperCase().trim();
-  const div = document.getElementById('avisoConcentracao');
-  if(!ticker){ div.innerHTML=''; return; }
-
-  const setorConhecido = setorDoTicker(ticker);
-  const campoSetor = document.getElementById('cSetor');
-  if(setorConhecido && !campoSetor.value) campoSetor.value = setorConhecido;
-
-  const setor = campoSetor.value.trim();
-  if(!setor){
-    div.innerHTML = setorConhecido ? '' : `<p class="nota">Setor não reconhecido para ${ticker} — preencha manualmente, ou complete o mapa de setores na aba Ranking.</p>`;
-    return;
-  }
-
-  const { valorAcoes, porSetor } = exposicaoPorSetor();
-  const atual = porSetor[setor] || 0;
-  const qtd = parseFloat(document.getElementById('cQtd').value) || 0;
-  const preco = parseFloat(document.getElementById('cPreco').value) || 0;
-  const valorCompra = qtd*preco;
-
-  const totalDepois = valorAcoes + valorCompra;
-  const setorDepois = atual + valorCompra;
-  const pctAntes = valorAcoes>0 ? (atual/valorAcoes*100) : 0;
-  const pctDepois = totalDepois>0 ? (setorDepois/totalDepois*100) : 0;
-  const teto = estado.config.tetoSetorPercentual;
-
-  const excede = pctDepois > teto;
-  div.innerHTML = `<div class="${excede?'alerta':'nota'}">
-    Setor "${setor}": ${pctAntes.toFixed(1)}% da carteira hoje${valorCompra>0?` → ${pctDepois.toFixed(1)}% com esta compra`:''}
-    ${excede ? ` — acima do teto configurado de ${teto}%.` : ''}
-  </div>`;
-}
-
-['cTicker','cSetor','cQtd','cPreco'].forEach(id=>{
-  document.getElementById(id).addEventListener('input', atualizarAvisoConcentracao);
-});
 document.getElementById('cTicker').addEventListener('input', mostrarSugestaoAlocacao);
 
 document.getElementById('formCompra').addEventListener('submit', (e)=>{
@@ -2334,6 +1585,7 @@ document.getElementById('formCompra').addEventListener('submit', (e)=>{
     const lote = estado.lotes.find(l=>l.id===edicaoEmCurso.id);
     if(lote){
       lote.posicaoId = pos.id;
+      higienizarEstado();   // remove a posição antiga se ficou sem lotes
       lote.data = data;
       lote.quantidade = parseFloat(document.getElementById('cQtd').value);
       lote.precoUnitario = parseFloat(document.getElementById('cPreco').value);
@@ -2379,7 +1631,6 @@ document.getElementById('formCompra').addEventListener('submit', (e)=>{
   e.target.reset();
   document.getElementById('cData').value = hoje();
   document.getElementById('sugestaoAlocacao').classList.add('oculto');
-  document.getElementById('avisoConcentracao').innerHTML = '';
   mudarTela('posicoes');
   if(!eraEdicao){
     alert(`Compra lançada. Posição ${ticker} está como "incompleta" — marque como completa na tela Posições quando considerar o tamanho adequado.`);
@@ -2504,7 +1755,7 @@ document.getElementById('formAporte').addEventListener('submit', (e)=>{
 document.getElementById('formPrecoManual').addEventListener('submit', (e)=>{
   e.preventDefault();
   const ticker = document.getElementById('mpTicker').value.toUpperCase().trim();
-  if(!estado.precos[ticker]) estado.precos[ticker] = {ultimoValido:null,dataUltimoValido:null,maxima52:null,minima52:null,mm50:null,mm200:null,falhasConsecutivas:0,suspeitaDeslistagem:false};
+  if(!estado.precos[ticker]) estado.precos[ticker] = {ultimoValido:null,dataUltimoValido:null,maxima52:null,minima52:null,falhasConsecutivas:0,suspeitaDeslistagem:false};
   const info = estado.precos[ticker];
   info.ultimoValido = parseFloat(document.getElementById('mpPreco').value);
   info.dataUltimoValido = hoje();
@@ -2512,12 +1763,8 @@ document.getElementById('formPrecoManual').addEventListener('submit', (e)=>{
   info.suspeitaDeslistagem = false;
   const max52 = document.getElementById('mpMax52').value;
   const min52 = document.getElementById('mpMin52').value;
-  const mm50 = document.getElementById('mpMM50').value;
-  const mm200 = document.getElementById('mpMM200').value;
   if(max52) info.maxima52 = parseFloat(max52);
   if(min52) info.minima52 = parseFloat(min52);
-  if(mm50) info.mm50 = parseFloat(mm50);
-  if(mm200) info.mm200 = parseFloat(mm200);
   registrarSnapshotValor();
   salvarEstado();
   e.target.reset();
@@ -2564,8 +1811,6 @@ function popularListasFiltro(){
   document.getElementById('listaFinanceiras').value = estado.listasFiltro.financeiras.join(', ');
   document.getElementById('listaRecJudicial').value = estado.listasFiltro.recuperacaoJudicial.join(', ');
   document.getElementById('pisoLiquidez').value = estado.config.pisoLiquidezDiaria;
-  document.getElementById('mapaSetoresTexto').value = Object.entries(estado.mapaSetores)
-    .map(([raiz,setor])=>`${raiz}=${setor}`).join('\n');
 }
 
 document.getElementById('btnSalvarListas').addEventListener('click', ()=>{
@@ -2575,30 +1820,6 @@ document.getElementById('btnSalvarListas').addEventListener('click', ()=>{
   estado.config.pisoLiquidezDiaria = parseFloat(document.getElementById('pisoLiquidez').value) || 0;
   salvarEstado();
   alert('Listas e piso de liquidez salvos. Reimporte o CSV para aplicar às novas exclusões.');
-});
-
-document.getElementById('btnSalvarMapaSetores').addEventListener('click', ()=>{
-  const texto = document.getElementById('mapaSetoresTexto').value;
-  const novoMapa = {};
-  let ignoradas = 0;
-  for(const linhaBruta of texto.split('\n')){
-    const linha = linhaBruta.trim();
-    if(!linha) continue;
-    const idx = linha.indexOf('=');
-    if(idx<0){ ignoradas++; continue; }
-    const raiz = linha.slice(0,idx).trim().toUpperCase();
-    const setor = linha.slice(idx+1).trim();
-    if(!raiz || !setor){ ignoradas++; continue; }
-    novoMapa[raiz] = setor;
-  }
-  estado.mapaSetores = novoMapa;
-  salvarEstado();
-  if(ultimoRanking) renderBlocoRanking(ultimoRanking);
-  alert(`Mapa de setores salvo: ${Object.keys(novoMapa).length} ticker(es).` + (ignoradas>0?` ${ignoradas} linha(s) ignorada(s) por formato inválido.`:''));
-});
-
-document.getElementById('chkDestacarMelhorSetor').addEventListener('change', ()=>{
-  if(ultimoRanking) renderBlocoRanking(ultimoRanking);
 });
 
 document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
@@ -2611,56 +1832,11 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
     if(!r.ok){ divResultado.innerHTML = `<div class="alerta critico">${r.msg}</div>`; document.getElementById('blocoRanking').classList.add('oculto'); return; }
 
     ultimoRanking = r;
-
-    // Snapshot enxuto: guarda o topo do ranking mais uma AMOSTRA DA CAUDA.
-    // MEDIDO em 07/08/2026: um snapshot completo (164 linhas) ocupava ~15 mil
-    // caracteres, e como o estado inteiro vive numa célula (limite 50 mil),
-    // cabiam só DUAS importações antes de a gravação ser recusada. O parecer
-    // externo classificou como P0 e estava certo — eu havia estimado "anos"
-    // por suposição, sem medir.
-    //
-    // A amostra da cauda NÃO é opcional: a simulação de preço-teto reprecifica
-    // o papel e recalcula o ranking inteiro procurando onde ele cruza o topN.
-    // Cortando só os primeiros, sumiam os candidatos de EV/EBIT alto que
-    // empurram o papel para fora — nem preço estratosférico produzia
-    // cruzamento, e o preço-teto virava "—" (regressão pega em teste).
-    // Guardando 1 a cada N da cauda, a faixa de EV/EBIT continua representada
-    // com uma fração do custo.
-    const LIMITE_TOPO = Math.max(estado.config.topN * 2, 60);
-    // Passo 3, escolhido por MEDIÇÃO do erro do preço-teto contra o ranking
-    // completo: passo 6 dava erro médio de 4,6% mas com pior caso de 25%
-    // (RIAA3) — grande demais para um número exibido como referência de
-    // preço. Passo 3 baixa para 1,9% médio e 6% no pior caso, custando 17
-    // linhas a mais por snapshot. Passo 2 não melhora (2,4%).
-    const PASSO_CAUDA = 3;
-    const detidosRaiz = new Set(Object.keys(tickersDetidos()));
-    const linhasSnapshot = r.candidatos
-      .filter((c,i) =>
-        i < LIMITE_TOPO ||                                  // topo íntegro
-        (i - LIMITE_TOPO) % PASSO_CAUDA === 0 ||            // amostra da cauda
-        detidosRaiz.has(raizTicker(c.ticker))               // nunca perder papel detido
-      )
-      .map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco, escoreQualidade:c.escoreQualidade, escoreTotal:c.escoreTotal, precoJustoGraham:c.precoJustoGraham }));
-
     estado.snapshotsRanking.push({
       data: hoje(), origem: 'statusinvest',
       criterio: r.criterio,
-      topN: estado.config.topN,          // o topN VIGENTE na importação
-      totalCandidatos: r.candidatos.length,
-      linhas: linhasSnapshot
+      linhas: r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, posicao:c.posicao, preco:c.preco }))
     });
-
-    // Retenção: apenas os 3 mais recentes. MEDIDO: cada snapshot custa ~5,5
-    // mil caracteres (60 linhas com os campos que o preço-teto e a aba
-    // Contexto precisam). Reter 12 estouraria o limite da célula em ~7 meses;
-    // reter 3 mantém o estado em ~16 mil, com folga permanente e sem
-    // degradar nada — nenhuma tela lê snapshot antigo, só o mais recente.
-    // Cortar campos foi descartado: `preco` e `evEbit` são exatamente o que
-    // a simulação de preço-teto consome.
-    const MAX_SNAPSHOTS = 3;
-    if(estado.snapshotsRanking.length > MAX_SNAPSHOTS){
-      estado.snapshotsRanking = estado.snapshotsRanking.slice(-MAX_SNAPSHOTS);
-    }
     salvarEstado();
 
     const totalExcluidos = Object.values(r.excluidos).reduce((s,arr)=>s+arr.length,0);
@@ -2681,57 +1857,7 @@ document.getElementById('btnImportarRanking').addEventListener('click', ()=>{
   }
 });
 
-// Colunas opcionais do Ranking — preferência de TELA, não de carteira, então
-// fica só no localStorage deste aparelho, fora do estado sincronizado (um
-// celular pode querer visão compacta e o PC, visão completa, sem um
-// sobrescrever a preferência do outro a cada sincronização).
-const COLUNAS_RANKING = [
-  ['setor','Setor'], ['carteira','Carteira'], ['graham','Preço Justo Graham'],
-  ['cotacao','Cotação'], ['mm50','MM50'], ['mm200','MM200'], ['qualidade','Qualidade']
-];
-const CHAVE_COLUNAS_RANKING = 'carteiraFormulaMagica_colunasRankingOcultas';
-
-function colunasRankingOcultas(){
-  try{ return JSON.parse(localStorage.getItem(CHAVE_COLUNAS_RANKING) || '[]'); }catch(e){ return []; }
-}
-function definirColunasRankingOcultas(lista){
-  try{ localStorage.setItem(CHAVE_COLUNAS_RANKING, JSON.stringify(lista)); }catch(e){}
-}
-
-function aplicarVisibilidadeColunasRanking(){
-  const tabela = document.getElementById('tabelaRanking');
-  const ocultas = new Set(colunasRankingOcultas());
-  tabela.className = COLUNAS_RANKING.filter(([c])=>ocultas.has(c)).map(([c])=>'oculta-'+c).join(' ');
-}
-
-function renderControlesColunaRanking(){
-  const cont = document.getElementById('controlesColunaRanking');
-  const ocultas = new Set(colunasRankingOcultas());
-  cont.innerHTML = COLUNAS_RANKING.map(([chave,rotulo])=>
-    `<label class="controle-coluna"><input type="checkbox" data-coluna="${chave}" ${ocultas.has(chave)?'':'checked'}>${rotulo}</label>`
-  ).join('') + `<button type="button" class="acao pequeno secundario" id="btnModoCompactoRanking" style="margin-left:auto">Modo compacto (celular)</button>`;
-
-  cont.querySelectorAll('[data-coluna]').forEach(chk=>{
-    chk.addEventListener('change', ()=>{
-      const atuais = new Set(colunasRankingOcultas());
-      if(chk.checked) atuais.delete(chk.dataset.coluna); else atuais.add(chk.dataset.coluna);
-      definirColunasRankingOcultas([...atuais]);
-      aplicarVisibilidadeColunasRanking();
-    });
-  });
-  document.getElementById('btnModoCompactoRanking').addEventListener('click', ()=>{
-    // Compacto = só o essencial do método (posição, ticker, EV/EBIT, ROIC,
-    // soma, DY); esconde tudo que foi adicionado depois como informação de
-    // apoio. Continua tudo lá — é um atalho de exibição, não de dado.
-    definirColunasRankingOcultas(COLUNAS_RANKING.map(([c])=>c));
-    renderControlesColunaRanking();
-    aplicarVisibilidadeColunasRanking();
-  });
-}
-
 function renderBlocoRanking(r){
-  renderControlesColunaRanking();
-  aplicarVisibilidadeColunasRanking();
   const topN = estado.config.topN;
   document.getElementById('topNLabel').textContent = 'top ' + topN;
   const ehPlRoe = r.criterio==='pl_roe';
@@ -2751,80 +1877,37 @@ function renderBlocoRanking(r){
 
   // tabela de ranking
   const detidos = tickersDetidos(); // raiz -> ticker detido
-
-  // Melhor (menor soma) por setor, considerando só quem está dentro do topN
-  // — é o que o destaque visual usa. Cálculo puramente informativo: nunca
-  // remove linha, nunca muda a soma de ninguém.
-  const melhorSomaPorSetor = {};
-  for(const c of r.candidatos){
-    if(c.posicao > topN) continue;
-    const setor = setorDoTicker(c.ticker);
-    if(!setor) continue;
-    if(!(setor in melhorSomaPorSetor) || c.soma < melhorSomaPorSetor[setor]) melhorSomaPorSetor[setor] = c.soma;
-  }
-  const destacarMelhorSetor = document.getElementById('chkDestacarMelhorSetor').checked;
-
+  // linhas no formato que precoCruzamentoTopN espera (mesma forma de um snapshot)
+  const linhasParaSimulacao = r.candidatos.map(c=>({ ticker:c.ticker, evEbit:c.evEbit, roic:c.roic, preco:c.preco }));
   const tbody = document.querySelector('#tabelaRanking tbody');
   tbody.innerHTML = '';
   for(const c of r.candidatos){
     const dentroTopN = c.posicao <= topN;
     const raiz = raizTicker(c.ticker);
     const jaDetido = detidos[raiz];
-    const setor = setorDoTicker(c.ticker);
-    const ehMelhorDoSetor = setor && melhorSomaPorSetor[setor]===c.soma;
     const tr = document.createElement('tr');
     if(!dentroTopN) tr.style.opacity = '0.4';
     if(dentroTopN && !jaDetido) tr.style.fontWeight = '600';
-    if(destacarMelhorSetor && dentroTopN && setor && !ehMelhorDoSetor) tr.style.opacity = '0.35';
     tr.innerHTML = `
       <td class="num">${c.posicao}</td>
       <td>${c.ticker}</td>
-      <td data-col="setor">${setor || '<span class="nota">?</span>'}${dentroTopN && setor && ehMelhorDoSetor ? ' <span class="tag completa">melhor do setor</span>' : ''}</td>
-      <td data-col="carteira">${jaDetido ? '<span class="tag completa">detida ('+jaDetido+')</span>' : ''}</td>
+      <td>${jaDetido ? '<span class="tag completa">detida ('+jaDetido+')</span>' : ''}</td>
       <td class="num">${c.fator1.toFixed(2)}</td>
       <td class="num">${fmtPct(c.fator2/100,1)}</td>
       <td class="num">${c.soma}</td>
       <td class="num">${c.dy!==null?c.dy.toFixed(1)+'%':'—'}${c.dy!==null && c.dy>30?' <span class="badge-desl">alto</span>':''}</td>
-      <td class="num" data-col="graham">${(()=>{
-        if(c.precoJustoGraham===null) return '—';
-        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
-        const cot = (info && info.ultimoValido!==null && info.ultimoValido!==undefined) ? info.ultimoValido : c.preco;
-        let margem = '';
-        if(cot!==null && cot!==undefined && cot>0){
-          const m = (c.precoJustoGraham/cot - 1)*100;   // >0 = cotação abaixo do justo (margem a favor)
-          const cls = m>=0 ? 'pos' : 'neg';
-          margem = ` <span class="${cls}" style="font-size:11px">(${m>=0?'+':''}${m.toFixed(0)}%)</span>`;
-        }
-        return fmtMoeda(c.precoJustoGraham) + margem;
-      })()}</td>
-      <td class="num" data-col="cotacao">${(()=>{
-        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
-        return (info && info.ultimoValido!==null && info.ultimoValido!==undefined) ? fmtMoeda(info.ultimoValido) : '—';
-      })()}</td>
-      <td class="num" data-col="mm50">${(()=>{
-        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
-        return (info && info.mm50) ? fmtMoeda(info.mm50) : '—';
-      })()}</td>
-      <td class="num" data-col="mm200">${(()=>{
-        const info = estado.precos[c.ticker] || estado.precos[detidos[raiz]];
-        if(!info || !info.mm200) return '—';
-        const precoRef = info.ultimoValido;
-        const abaixo = precoRef!==null && precoRef < info.mm200;
-        return fmtMoeda(info.mm200) + (abaixo ? ' <span class="badge-desl">abaixo</span>' : '');
-      })()}</td>
-      <td class="num" data-col="qualidade" title="${c.escoreDetalhe}">${c.escoreTotal>0 ? c.escoreQualidade+'/'+c.escoreTotal : '—'}</td>`;
+      <td class="num">${(()=>{
+        if(c.preco===null || r.criterio==='pl_roe') return '—';
+        const cruz = precoCruzamentoTopN(linhasParaSimulacao, {ticker:c.ticker, evEbit:c.evEbit, preco:c.preco}, topN);
+        return cruz ? fmtMoeda(cruz.precoCruzamento) : '—';
+      })()}</td>`;
     tbody.appendChild(tr);
   }
 }
 
 document.getElementById('btnAplicarElegibilidade').addEventListener('click', ()=>{
   if(!ultimoRanking){ alert('Importe um CSV primeiro nesta sessão.'); return; }
-  // Usa o topN VIGENTE NA IMPORTAÇÃO deste ranking, não o que estiver na
-  // configuração agora (apontado em parecer externo, 07/08/2026): se o
-  // usuário importa com topN=30 e depois muda para 25, aplicar o 25 novo a
-  // um ranking calculado com 30 mistura dois critérios distintos.
-  const snapshotAtual = ultimoSnapshotRanking();
-  const topN = (snapshotAtual && snapshotAtual.topN) ? snapshotAtual.topN : estado.config.topN;
+  const topN = estado.config.topN;
   const raizesElegiveis = new Set(ultimoRanking.candidatos.filter(c=>c.posicao<=topN).map(c=>raizTicker(c.ticker)));
 
   let alterados = 0;
@@ -3142,14 +2225,8 @@ function renderCalendario(){
     <p class="nota">
       O limite incide sobre o total vendido no mês, não sobre o lucro. Acima dele, o ganho
       é tributado à alíquota configurada (${fmtPct(estado.config.aliquotaGanho,0)}).
-      ${(()=>{
-        const d = estado.config.dataVerificacaoParametrosFiscais;
-        const meses = d ? mesesEntre(d, hoje()) : null;
-        const vencido = meses!==null && meses >= 6;
-        return (d ? `Parâmetros conferidos na Receita Federal em ${fmtData(d)}.` : 'Parâmetros nunca conferidos nesta instalação.')
-          + ' A MP 1.303/2025, que propunha extinguir esta isenção, <b>caducou em 08/10/2025</b> sem ser votada — as regras anteriores seguem valendo.'
-          + (vencido ? ` <b>Última conferência há ${meses} meses</b> — regra tributária muda por lei nova a qualquer tempo; reconfira em fonte oficial e atualize a data em Configuração.` : ' Reconfira em fonte oficial antes de vender.');
-      })()}
+      Parâmetro verificado em 04/08/2026 — há Medida Provisória em tramitação que pode
+      alterar isso; reconferir a cada semestre.
     </p>`;
 
   const calc = todasPosicoesCalculadas()
@@ -3562,9 +2639,7 @@ function contextoParaTicker(ticker){
     posicaoRanking: linha.posicao,
     precoNoSnapshot: linha.preco,
     dentroTopN: cruzamento.dentroAgora,
-    precoAlvo: cruzamento.precoCruzamento,
-    escoreQualidade: linha.escoreQualidade!==undefined ? linha.escoreQualidade : null,
-    escoreTotal: linha.escoreTotal!==undefined ? linha.escoreTotal : 5
+    precoAlvo: cruzamento.precoCruzamento
   };
 }
 
@@ -3590,7 +2665,7 @@ function renderContexto(){
     const tr = document.createElement('tr');
     if(!ctx){
       tr.innerHTML = `<td>${p.ticker}</td><td class="num">${c.precoAtual!==null?fmtMoeda(c.precoAtual):'—'}</td>
-        <td colspan="6" class="nota">sem dado deste ticker no último ranking importado</td>`;
+        <td colspan="5" class="nota">sem dado deste ticker no último ranking importado</td>`;
       tbody.appendChild(tr);
       continue;
     }
@@ -3603,7 +2678,6 @@ function renderContexto(){
       <td class="num">${ctx.posicaoRanking!=null?ctx.posicaoRanking:'—'} / ${estado.config.topN}</td>
       <td class="num">${fmtMoeda(ctx.precoAlvo)} <span class="nota">(${rotulo})</span></td>
       <td class="num${ctx.dentroTopN?' '+classeSinal(-distancia):''}">${distancia!==null?fmtPct(distancia,1):'—'}</td>
-      <td class="num">${(ctx.escoreQualidade!==null && ctx.escoreTotal>0)?ctx.escoreQualidade+'/'+ctx.escoreTotal:'—'}</td>
       <td>${fmtData(ctx.dataSnapshot)}</td>`;
     tbody.appendChild(tr);
   }
@@ -3641,23 +2715,7 @@ function renderContexto(){
    ========================================================================== */
 
 const CHAVE_URL = 'carteiraFormulaMagica_url';
-// Segredo compartilhado com o Apps Script. Fica em chave PRÓPRIA do
-// localStorage, fora do `estado` — mesma razão pela qual a URL fica: é
-// configuração deste aparelho, e se viajasse dentro do estado sincronizado um
-// aparelho sobrescreveria a configuração do outro a cada abertura.
-// Nunca entra em query string: viaja sempre no corpo do POST. Colocá-lo na URL
-// o faria vazar exatamente junto com a URL, que é o vazamento de que ele
-// existe para nos defender.
-const CHAVE_SEGREDO = 'carteiraFormulaMagica_segredo';
 const CHAVE_PENDENTE = 'carteiraFormulaMagica_pendente';
-// Timestamp (campo "atualizadoEm" devolvido pelo Apps Script) da última vez
-// que ESTE aparelho confirmou saber o que está na planilha — seja por ter
-// baixado, seja por ter enviado com sucesso. É o que permite detectar
-// conflito: se ao reabrir o app este aparelho tem pendência E o timestamp
-// da planilha não bate mais com o que guardamos aqui, alguém mudou a
-// planilha por outro caminho enquanto estávamos com alteração local não
-// confirmada — não dá para simplesmente empurrar por cima.
-const CHAVE_ULTIMO_GRAVADOEM = 'carteiraFormulaMagica_ultimoGravadoEm';
 let timerEnvio = null;
 
 function obterUrlConexao(){
@@ -3666,54 +2724,11 @@ function obterUrlConexao(){
 function definirUrlConexao(u){
   try{ localStorage.setItem(CHAVE_URL, u); }catch(e){}
 }
-function obterSegredo(){
-  try{ return localStorage.getItem(CHAVE_SEGREDO) || ''; }catch(e){ return ''; }
-}
-function definirSegredo(s){
-  try{ localStorage.setItem(CHAVE_SEGREDO, s || ''); }catch(e){}
-}
-
-// Chamada única ao Apps Script. TUDO passa por POST agora — inclusive as
-// leituras, que antes eram GET. O motivo é o segredo: um GET só consegue
-// carregá-lo em query string, e aí ele vazaria junto com a URL, que é
-// justamente o vazamento contra o qual ele existe. No corpo do POST, ele não
-// aparece em histórico de navegador, captura de tela nem log de referência.
-//
-// O `Content-Type: text/plain` continua sendo de propósito: evita a
-// verificação prévia (preflight), que o Apps Script não responde bem.
-async function chamarApi(acao, estadoParaGravar){
-  const url = obterUrlConexao();
-  if(!url) throw new Error('sem endereço de conexão');
-
-  const envelope = { _envelope:1, acao: acao, segredo: obterSegredo() };
-  if(acao === 'gravar') envelope.estado = estadoParaGravar;
-
-  const r = await fetch(url, {
-    method:'POST',
-    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-    redirect:'follow',
-    body: JSON.stringify(envelope)
-  });
-  if(!r.ok) throw new Error('http '+r.status);
-
-  let resp = null;
-  try{ resp = await r.json(); }catch(e){ throw new Error('resposta ilegível'); }
-  if(!resp || resp.status !== 'ok'){
-    throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
-  }
-  return resp;
-}
 function haPendencia(){
   try{ return localStorage.getItem(CHAVE_PENDENTE) === '1'; }catch(e){ return false; }
 }
 function definirPendencia(v){
   try{ localStorage.setItem(CHAVE_PENDENTE, v ? '1' : '0'); }catch(e){}
-}
-function obterUltimoGravadoEm(){
-  try{ return localStorage.getItem(CHAVE_ULTIMO_GRAVADOEM) || null; }catch(e){ return null; }
-}
-function definirUltimoGravadoEm(v){
-  try{ if(v) localStorage.setItem(CHAVE_ULTIMO_GRAVADOEM, v); }catch(e){}
 }
 
 function indicadorSinc(estadoCor, texto){
@@ -3748,53 +2763,25 @@ function salvarLocal(){
   }
 }
 
-// Aplica um estado vindo da planilha ao aparelho local. Extraído como
-// função própria porque agora tem DOIS chamadores: o fluxo normal de
-// download, e o fluxo de conflito quando o usuário escolhe descartar as
-// alterações locais em favor do que está na planilha.
-function aplicarEstadoRemoto(estadoRemoto){
-  const padrao = estadoPadrao();
-  estado = Object.assign({}, padrao, estadoRemoto);
-  estado.config = Object.assign({}, padrao.config, estadoRemoto.config||{});
-  estado.listasFiltro = Object.assign({}, padrao.listasFiltro, estadoRemoto.listasFiltro||{});
-  estado.mapaTitulos = estadoRemoto.mapaTitulos || {};
-  estado.mapaSetores = Object.assign({}, padrao.mapaSetores, estadoRemoto.mapaSetores||{});
-  estado.snapshotsRanking = estadoRemoto.snapshotsRanking || [];
-
-  const linhasAntes = estado.snapshotsRanking.reduce((s,sn)=>s+(sn.linhas?sn.linhas.length:0), 0);
-  const snapshotsAntes = estado.snapshotsRanking.length;
-  podarSnapshotsRanking(estado);
-  const podou = estado.snapshotsRanking.length < snapshotsAntes ||
-    estado.snapshotsRanking.reduce((s,sn)=>s+(sn.linhas?sn.linhas.length:0), 0) < linhasAntes;
-
-  recalcularCaixa();   // nunca confiar cegamente no caixa vindo de fora
-  salvarLocal();
-  popularListasFiltro();
-
-  if(podou){
-    // A planilha ainda tem a versão inchada — poda só local não resolve.
-    // Reenviar fecha o ciclo: a próxima sincronização de qualquer aparelho
-    // já recebe a versão enxuta.
-    agendarEnvio();
-  }
-}
-
 async function enviarEstado(){
   const url = obterUrlConexao();
   if(!url) return false;
   indicadorSinc('busy','salvando');
-  // Poda antes de serializar: remove preços de tickers que não são detidos
-  // nem estão no snapshot de ranking atual (regeneram na próxima importação).
-  // É a correção da causa real do estouro de 18/08/2026 — a seção `precos`
-  // acumulava 600+ tickers e ocupava 96% do estado. Poda o próprio `estado`
-  // em memória: o que sai é descartável e volta sozinho quando preciso.
-  podarEstado(estado);
-  salvarLocal();
   try{
-    const resp = await chamarApi('gravar', estado);
+    const r = await fetch(url, {
+      method:'POST',
+      // text/plain evita a verificação prévia (preflight), que o Apps
+      // Script não responde bem
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      redirect:'follow',
+      body: JSON.stringify(estado)
+    });
+    if(!r.ok) throw new Error('http '+r.status);
+    let resp = null;
+    try{ resp = await r.json(); }catch(e){ throw new Error('resposta ilegível'); }
+    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
 
     definirPendencia(false);
-    definirUltimoGravadoEm(resp.gravadoEm);
     indicadorSinc('ok','salvo');
     bannerSinc('');
     return true;
@@ -3809,69 +2796,48 @@ async function baixarEstado(){
   const url = obterUrlConexao();
   if(!url) return false;
 
-  indicadorSinc('busy','sincronizando');
-  let resp;
-  try{
-    resp = await chamarApi('estado');
-  }catch(e){
-    indicadorSinc('err', haPendencia() ? 'não salvo na nuvem' : 'offline');
-    bannerSinc('Sem conexão com a planilha ('+e.message+'). Mostrando a última versão salva neste aparelho. '+
-      (haPendencia() ? 'Suas mudanças serão reenviadas quando a conexão voltar.' : 'Tenta de novo quando a conexão voltar.'));
-    render();
-    return false;
-  }
-
+  // Se este aparelho tem alteração ainda não confirmada, baixar apagaria.
+  // Nesse caso envia em vez de baixar.
   if(haPendencia()){
-    // Este aparelho tem alteração local não confirmada. Antes de simplesmente
-    // empurrar por cima (comportamento antigo, causou o bug de 07/08/2026:
-    // um reset feito no PC foi sobrescrito por uma pendência velha do
-    // celular), confere se a planilha mudou desde a última vez que ESTE
-    // aparelho confirmou sincronização.
-    const gravadoRemoto = resp.atualizadoEm || null;
-    const ultimoConhecido = obterUltimoGravadoEm();
-    const houveMudancaPorFora = !resp.vazio && gravadoRemoto && ultimoConhecido && gravadoRemoto !== ultimoConhecido;
-
-    if(houveMudancaPorFora){
-      const manterLocal = confirm(
-        'A planilha foi alterada por outro aparelho (ou uma ação como resetar os dados) desde a última vez ' +
-        'que ESTE aparelho confirmou sincronização — e este aparelho também tem alterações não enviadas.\n\n' +
-        'OK = manter as alterações deste aparelho e sobrescrever a planilha com elas.\n' +
-        'Cancelar = descartar as alterações deste aparelho e usar o que está na planilha.'
-      );
-      if(manterLocal){
-        await enviarEstado();
-      } else {
-        definirPendencia(false);
-        if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
-          aplicarEstadoRemoto(resp.estado);
-          definirUltimoGravadoEm(gravadoRemoto);
-        }
-      }
-      indicadorSinc(manterLocal?'ok':'ok', manterLocal?'salvo':'sincronizado');
-      render();
-      return true;
-    }
-
-    // Sem conflito detectável (planilha não mudou, ou é a primeira sincronização
-    // deste aparelho e não há como comparar) — comportamento original: envia.
     await enviarEstado();
     render();
     return true;
   }
 
-  // Sem pendência: fluxo normal de download.
-  if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
-    aplicarEstadoRemoto(resp.estado);
-  } else if(resp.vazio){
-    // primeira vez: a planilha ainda não tem nada. Sobe o que houver local.
-    await enviarEstado();
-  }
-  if(resp.atualizadoEm) definirUltimoGravadoEm(resp.atualizadoEm);
+  indicadorSinc('busy','sincronizando');
+  try{
+    const r = await fetch(url, { method:'GET', redirect:'follow' });
+    if(!r.ok) throw new Error('http '+r.status);
+    const resp = await r.json();
+    if(!resp || resp.status !== 'ok') throw new Error(resp && resp.message ? resp.message : 'recusado pelo script');
 
-  indicadorSinc('ok', resp.recuperadoDoBackup ? 'sincronizado (recuperado do backup)' : 'sincronizado');
-  bannerSinc(resp.recuperadoDoBackup ? 'A célula principal estava ilegível e os dados foram recuperados do backup automático da versão anterior.' : '');
-  render();
-  return true;
+    if(resp.estado && resp.estado.versaoSchema === VERSAO_SCHEMA){
+      const padrao = estadoPadrao();
+      estado = Object.assign({}, padrao, resp.estado);
+      estado.config = Object.assign({}, padrao.config, resp.estado.config||{});
+      estado.listasFiltro = Object.assign({}, padrao.listasFiltro, resp.estado.listasFiltro||{});
+      estado.mapaTitulos = resp.estado.mapaTitulos || {};
+      estado.snapshotsRanking = resp.estado.snapshotsRanking || [];
+      recalcularCaixa();   // nunca confiar cegamente no caixa vindo de fora
+      const limpou = higienizarEstado();
+      salvarLocal();
+      if(limpou) salvarEstado(false);   // propaga a limpeza para a planilha
+    } else if(resp.vazio){
+      // primeira vez: a planilha ainda não tem nada. Sobe o que houver local.
+      await enviarEstado();
+    }
+
+    indicadorSinc('ok', resp.recuperadoDoBackup ? 'sincronizado (recuperado do backup)' : 'sincronizado');
+    bannerSinc(resp.recuperadoDoBackup ? 'A célula principal estava ilegível e os dados foram recuperados do backup automático da versão anterior.' : '');
+    popularListasFiltro();
+    render();
+    return true;
+  }catch(e){
+    indicadorSinc('err','offline');
+    bannerSinc('Sem conexão com a planilha ('+e.message+'). Mostrando a última versão salva neste aparelho. As mudanças sincronizam quando a conexão voltar.');
+    render();
+    return false;
+  }
 }
 
 async function sincronizarCotacoes(silencioso){
@@ -3879,20 +2845,19 @@ async function sincronizarCotacoes(silencioso){
   if(!url) return false;
   if(!silencioso) indicadorSinc('busy','buscando cotações');
 
-  let dados;
   try{
-    dados = await chamarApi('cotacoes');
-  }catch(err){
-    bannerSinc('Não foi possível buscar as cotações: '+err.message);
-    return false;
-  }
+    const r = await fetch(url + '?acao=cotacoes', { method:'GET', redirect:'follow' });
+    const dados = await r.json();
+    if(!dados || dados.status !== 'ok'){
+      bannerSinc('Não foi possível buscar as cotações: '+(dados && dados.message ? dados.message : 'erro não informado'));
+      return false;
+    }
 
-  try{
     let atualizados=0, semPreco=0, novosSuspeitos=[];
     for(const c of dados.cotacoes){
       const ticker = c.ticker;
       if(!estado.precos[ticker]) estado.precos[ticker] =
-        { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, mm50:null, mm200:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
+        { ultimoValido:null, dataUltimoValido:null, maxima52:null, minima52:null, falhasConsecutivas:0, suspeitaDeslistagem:false };
       const info = estado.precos[ticker];
 
       if(c.preco !== null && c.preco !== undefined){
@@ -3911,8 +2876,6 @@ async function sincronizarCotacoes(silencioso){
       }
       if(c.max52!==null && c.max52!==undefined) info.maxima52 = c.max52;
       if(c.min52!==null && c.min52!==undefined) info.minima52 = c.min52;
-      if(c.mm50!==null && c.mm50!==undefined) info.mm50 = c.mm50;
-      if(c.mm200!==null && c.mm200!==undefined) info.mm200 = c.mm200;
     }
 
     registrarSnapshotValor();
@@ -3936,7 +2899,6 @@ async function sincronizarCotacoes(silencioso){
 function mostrarTelaConexao(){
   document.getElementById('telaConexao').classList.remove('oculto');
   document.getElementById('inputUrlConexao').value = obterUrlConexao();
-  document.getElementById('inputSegredoConexao').value = obterSegredo();
 }
 function esconderTelaConexao(){
   document.getElementById('telaConexao').classList.add('oculto');
@@ -3954,29 +2916,7 @@ document.getElementById('btnConectar').addEventListener('click', async ()=>{
     return;
   }
   erro.innerHTML = '';
-  const s = document.getElementById('inputSegredoConexao').value;
-
-  // Guarda os dois ANTES do teste, porque chamarApi lê do localStorage.
-  const urlAnterior = obterUrlConexao();
-  const segredoAnterior = obterSegredo();
   definirUrlConexao(u);
-  definirSegredo(s);
-
-  // Testa antes de fechar a tela. Sem isso, um segredo errado só apareceria
-  // como um banner de falha atrás de uma tela já fechada, e o aparelho ficaria
-  // acumulando pendência de sincronização sem o usuário entender por quê —
-  // exatamente a condição que causou o bug de sobrescrita de 07/08/2026.
-  erro.innerHTML = '<p class="nota">Testando a conexão…</p>';
-  try{
-    await chamarApi('estado');
-  }catch(e){
-    definirUrlConexao(urlAnterior);
-    definirSegredo(segredoAnterior);
-    erro.innerHTML = '<div class="alerta critico">Não foi possível conectar: '+e.message+'</div>';
-    return;
-  }
-
-  erro.innerHTML = '';
   esconderTelaConexao();
   await baixarEstado();
   await sincronizarCotacoes(true);
@@ -3993,12 +2933,6 @@ document.getElementById('btnTrocarConexao').addEventListener('click', ()=> mostr
 function popularConfigSincronizacao(){
   const el = document.getElementById('cfgUrlConexao');
   if(el) el.value = obterUrlConexao();
-  const st = document.getElementById('cfgStatusSegredo');
-  if(st){
-    st.textContent = obterSegredo()
-      ? 'Segredo de conexão: definido neste aparelho.'
-      : 'Segredo de conexão: não definido neste aparelho. Se o Apps Script já estiver em modo exigente, a sincronização vai ser recusada.';
-  }
 }
 
 /* ==========================================================================
