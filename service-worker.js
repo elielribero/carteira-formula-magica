@@ -6,7 +6,7 @@
 // Subir uma nova versão do app: mude CACHE_NAME (ex.: 'carteira-fm-v2').
 // Isso invalida o cache antigo automaticamente no próximo carregamento online.
 
-const CACHE_NAME = 'carteira-fm-v7';
+const CACHE_NAME = 'carteira-fm-v20';
 const ARQUIVOS_ESSENCIAIS = [
   './',
   './index.html',
@@ -37,14 +37,35 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
+  const url = new URL(req.url);
+  const mesmaOrigem = url.origin === self.location.origin;
+
+  // NUNCA cachear chamadas de origem cruzada (a API do Apps Script). São
+  // dado vivo e mutável — a sincronização com a planilha. Bug real corrigido
+  // em 07/08/2026: sem esta checagem, o cache-first abaixo respondia com uma
+  // cópia velha da sincronização em vez de buscar de novo na rede, então um
+  // reset feito na planilha não aparecia depois de atualizar a página — o
+  // app mostrava dados de antes do reset, indefinidamente, até o cache
+  // expirar ou ser limpo manualmente. Só o app shell (arquivos deste próprio
+  // domínio) deve passar pela lógica de cache abaixo.
+  if (!mesmaOrigem) {
+    return; // deixa o navegador buscar na rede normalmente, sem passar pelo SW
+  }
+
   const isNavegacao = req.mode === 'navigate';
 
   if (isNavegacao) {
     event.respondWith(
       fetch(req)
         .then((resp) => {
-          const copia = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copia));
+          // Só guarda no cache se a resposta for boa. Sem esta checagem, um 404
+          // ou uma página de erro do servidor de hospedagem virava o
+          // './index.html' cacheado e passava a ser servida offline
+          // indefinidamente — o app "quebrado para sempre" sem causa visível.
+          if (resp && resp.ok) {
+            const copia = resp.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copia));
+          }
           return resp;
         })
         .catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
@@ -57,11 +78,19 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(req)
         .then((resp) => {
-          const copia = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copia));
+          // Mesma regra da navegação: resposta ruim não entra no cache.
+          if (resp && resp.ok) {
+            const copia = resp.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copia));
+          }
           return resp;
-        })
-        .catch(() => cached);
+        });
+      // Sem .catch aqui de propósito: o antigo era `.catch(() => cached)`, e
+      // neste ponto `cached` é sempre undefined (o `if` acima já teria
+      // retornado). Devolver undefined ao respondWith falha do mesmo jeito que
+      // deixar a promessa rejeitar, mas escondia isso atrás de um fallback
+      // aparente. Falhar aqui é o comportamento correto: é um arquivo do app
+      // shell que não está no cache e a rede não trouxe.
     })
   );
 });
